@@ -3,6 +3,8 @@ import numpy as np  # Numpy is used for numerical operations, mainly handling ar
 from pymongo import MongoClient  # MongoDB client for connecting and interacting with the database
 from keras.models import load_model  # type: ignore # For loading the pre-trained Keras deep learning model
 from sklearn.preprocessing import StandardScaler  # StandardScaler for feature scaling during model input
+import joblib
+import pandas as pd
 
 from dotenv import load_dotenv  # Load environment variables from a .env file for secure configuration
 import os  # For interacting with operating system functionalities, such as accessing environment variables
@@ -18,6 +20,10 @@ model = load_model('final_deep_learning_model.h5')
 
 # For testing purposes: Initially, scaling wasn't working properly so the scaler is commented out
 # scaler = StandardScaler()
+structured_data_preprocessor = joblib.load('structured_data_preprocessor.pkl')
+time_series_scaler = joblib.load('time_series_scaler.pkl')
+top_features_list = joblib.load('top_features_list.pkl')
+
 
 # Collect user inputs using Streamlit's user interface components
 # The input corresponds to the number of pregnancies the user has had
@@ -41,37 +47,28 @@ sleep = st.number_input("Enter total sleep on average per day in hours", value=0
 
 # Gender selection input (either Male or Female), with corresponding binary encoding for model
 gender = st.selectbox("Select your gender", options=["Male", "Female"])
-gender_male = 1 if gender == "Male" else 0  # Binary encoding for male
-gender_female = 1 if gender == "Female" else 0  # Binary encoding for female
 
 # Age input
 age = st.number_input("Enter age", value=0)
 
 # Family history of diabetes input (Yes/No) with binary encoding
-family_diabetes = st.selectbox("Do you have a family history of diabetes?", options=["Yes", "No"])
-family_diabetes_yes = 1 if family_diabetes == "Yes" else 0
-family_diabetes_no = 1 if family_diabetes == "No" else 0
+family_diabetes = st.selectbox("Do you have a family history of diabetes?", options=["yes", "no"])
+
 
 # Physical activity level selection (None, Less than half an hour, etc.), with corresponding binary encoding
 physically_active = st.selectbox(
     "On average, how much are you physically active per day?", 
-    options=["Less than half an hr", "None", "More than half an hr", "One hr or more"]
+    options=["less than half an hr", "none", "more than half an hr", "one hr or more"]
 )
-physically_active_less_than_half_hr = 1 if physically_active == "Less than half an hr" else 0
-physically_active_none = 1 if physically_active == "None" else 0
 
 # Blood pressure level input (High, Normal, Low), with corresponding binary encoding
 bp_level = st.selectbox(
     label="What is your blood pressure level? (e.g., Normal, High, Low)",
-    options=["High", "Normal", "Low"]
+    options=["high", "normal", "low"]
 )
-bp_level_high = 1 if bp_level == "High" else 0
-bp_level_normal = 1 if bp_level == "Normal" else 0
 
 # High blood pressure diagnosis (Yes/No) with binary encoding
-high_bp = st.selectbox("Are you diagnosed with high blood pressure?", options=["Yes", "No"])
-high_bp_yes = 1 if high_bp == "Yes" else 0
-high_bp_no = 1 if high_bp == "No" else 0
+high_bp = st.selectbox("Are you diagnosed with high blood pressure?", options=["yes", "no"])
 
 # Collect user input for Continuous Glucose Monitoring (CGM) data. Expecting 60 values total (6 features for 10 timesteps)
 time_series_input = st.text_area(
@@ -79,6 +76,42 @@ time_series_input = st.text_area(
     "Please provide exactly 60 values, comma-separated, with 6 values per timestep for 10 timesteps."
     "Example: 100,105,110,120,115,100,..."
 )
+
+# Assign default values for 'Smoking' and 'Alcohol' since the user doesn't provide these inputs
+smoking = "no"  # Assuming 'No' as default
+alcohol = "no"  # Assuming 'No' as default
+
+# Organize user inputs into a dictionary matching the expected features
+input_data_dict = {
+    'Pregancies': pregnancies,
+    'BMI': bmi,
+    'SoundSleep': sound_sleep,
+    'Sleep': sleep,
+    'Gender': gender,
+    'Age': age,
+    'Family_Diabetes': family_diabetes,
+    'PhysicallyActive': physically_active,
+    'BPLevel': bp_level,
+    'highBP': high_bp,
+    'Smoking': smoking,   # Default value
+    'Alcohol': alcohol    # Default value
+}
+
+# Convert the input data into a DataFrame
+input_data = pd.DataFrame([input_data_dict])
+
+# Apply the preprocessor to transform the data
+# This will scale the numerical features and one-hot encode the categorical ones
+structured_input_transformed = structured_data_preprocessor.transform(input_data)
+
+# After transforming the input data, filter the top features for prediction
+input_data_transformed_df = pd.DataFrame(structured_input_transformed, columns=structured_data_preprocessor.get_feature_names_out())
+
+# Select only the columns (features) that are in the top features list
+filtered_input_data = input_data_transformed_df[top_features_list]
+
+# Convert filtered data back to a numpy array for model input
+filtered_input_data_array = filtered_input_data.to_numpy()
 
 # When the user clicks the "Submit" button, proceed to handle the input data and make a prediction
 if st.button("Submit"):
@@ -93,19 +126,11 @@ if st.button("Submit"):
             # Reshape the CGM data to match the model's input shape (1 sample, 10 timesteps, 6 features)
             time_series_values = time_series_values.reshape(1, 10, 6)
 
-            # Prepare the fine-tuned features collected earlier, reshaped to match the model's input requirements
-            fine_tuned_features = np.array([[pregnancies, bmi, sound_sleep, sleep,  
-                                             gender_male, age, gender_female, family_diabetes_yes, 
-                                             physically_active_less_than_half_hr, physically_active_none, 
-                                             family_diabetes_no, bp_level_high, high_bp_no, high_bp_yes, 
-                                             bp_level_normal]])
-
-            # Scaling commented out for testing as it didn't work as expected
-            # fine_tuned_features_scaled = scaler.transform(fine_tuned_features)
-            # time_series_values_scaled = scaler.transform(time_series_values.reshape(-1, 6)).reshape(1, 10, 6)
+            # Scale the time-series data
+            time_series_scaled = time_series_scaler.transform(time_series_values.reshape(-1, 6)).reshape(1, 10, 6)
 
             # Make a prediction using the model, providing both the time-series data and fine-tuned features
-            prediction = model.predict([time_series_values, fine_tuned_features])
+            prediction = model.predict([time_series_scaled, filtered_input_data_array])
 
             # Get the index of the highest probability from the prediction (this corresponds to the predicted class)
             predicted_class = np.argmax(prediction)
@@ -129,26 +154,10 @@ if st.button("Submit"):
             db = client['diabetes_data']  # Access the 'diabetes_data' database
             collection = db['predictions']  # Access the 'predictions' collection in the database
 
+            input_data_dict['cgm_data'] = time_series_input
             # Insert the collected inputs and the prediction results into the MongoDB database
             collection.insert_one({
-                "input_values": {
-                    "pregnancies": pregnancies,
-                    "bmi": bmi,
-                    "sound_sleep": sound_sleep,
-                    "sleep": sleep,
-                    "gender_male": gender_male,
-                    "age": age,
-                    "gender_female": gender_female,
-                    "family_diabetes_yes": family_diabetes_yes,
-                    "physically_active_less_than_half_hr": physically_active_less_than_half_hr,
-                    "physically_active_none": physically_active_none,
-                    "family_diabetes_no": family_diabetes_no,
-                    "bp_level_high": bp_level_high,
-                    "high_bp_no": high_bp_no,
-                    "high_bp_yes": high_bp_yes,
-                    "bp_level_normal": bp_level_normal,
-                    "cgm_data": time_series_input,
-                },
+                "input_values": input_data_dict,
                 "prediction": prediction.tolist(),  # Convert the prediction to a list before saving it
                 "diagnosis": diagnosis  # Save the diagnosis result
             })
