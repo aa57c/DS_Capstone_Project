@@ -1,160 +1,157 @@
-import streamlit as st  # Streamlit is used for building interactive web applications in Python
-import numpy as np  # NumPy is used for numerical operations, mainly handling arrays
-from pymongo import MongoClient  # MongoDB client for connecting to the MongoDB database
-from keras.models import load_model  # type: ignore # Used to load a pre-trained Keras deep learning model
-from sklearn.preprocessing import StandardScaler  # StandardScaler for feature scaling
-import joblib  # Used for loading pre-trained scalers and preprocessor objects
-import pandas as pd  # Pandas is used for handling data in tabular format
-from dotenv import load_dotenv  # Load environment variables from a .env file for secure configuration
-import os  # For interacting with environment variables
+import streamlit as st
+import numpy as np
+import pandas as pd
+import joblib
+import os
 
-# Load environment variables from the .env file (e.g., database connection strings)
-load_dotenv()
+min_max_scaler = joblib.load('min_max_scaler.pkl')
 
-# Get MongoDB URI from environment variables for a secure connection to the MongoDB database
-mongo_uri = os.getenv('MONGO_DB_CONN_URL')
+# Streamlit session state to keep track of gender selection across pages
+if 'gender' not in st.session_state:
+    st.session_state.gender = None
 
-# Load the pre-trained Keras deep learning model (assumed to be a .h5 model file)
-model = load_model('final_deep_learning_model.h5')
+# Helper function to add style to sections
+def styled_header(title, subtitle=None):
+    st.markdown(f"<h1 style='color: #4CAF50;'>{title}</h1>", unsafe_allow_html=True)
+    if subtitle:
+        st.markdown(f"<h3 style='color: #555;'>{subtitle}</h3>", unsafe_allow_html=True)
 
-# Load the pre-trained scalers and top feature list using joblib
-structured_data_preprocessor = joblib.load('structured_data_preprocessor.pkl')  # Preprocessor for structured input
-time_series_scaler = joblib.load('time_series_scaler.pkl')  # Scaler for time-series input (CGM data)
-top_features_list = joblib.load('top_features_list.pkl')  # List of top features for the model
+# Page 1: Gender Selection
+if st.session_state.gender is None or st.session_state.gender == "Select your gender":
+    styled_header("Diabetes Prediction App")
+    
+    # Add explanation text with formatting
+    # st.markdown("### Help us provide accurate predictions by selecting the appropriate gender category.")
+    st.session_state.gender = st.selectbox("Select your gender", options=["Select your gender", "Male", "Female"])
+    
+    # Check if gender is selected, then rerun
+    if st.session_state.gender != "Select your gender":
+        st.experimental_rerun()
 
-# Collect user inputs through Streamlit's interactive interface
-pregnancies = st.number_input("How many pregnancies have you had in total?", min_value=0, value=0)
-
-# Collect height and weight to calculate BMI
-height_in = st.number_input("Enter your height (in inches):", min_value=0.0, value=0.0)
-weight_lb = st.number_input("Enter your weight (in pounds):", min_value=0.0, value=0.0)
-
-# Calculate BMI if both height and weight are provided
-if height_in > 0 and weight_lb > 0:
-    # BMI calculation using the imperial system: (weight in pounds * 703) / (height in inches)^2
-    bmi = (weight_lb * 703) / (height_in ** 2)
-    st.write(f"Your calculated BMI is: {bmi:.2f}")
+# Page 2: Gender-Specific Questions
 else:
-    st.write("Please enter valid height and weight to calculate BMI.")
+    styled_header(f"Questionnaire for {st.session_state.gender} Patients")
+    st.markdown("Please fill out the details carefully. Accurate information helps in better prediction.")
 
-# Collect inputs related to sleep quality and quantity
-sound_sleep = st.number_input("How many hours of sound sleep do you get on average?", value=0.0)
-sleep = st.number_input("Enter your total sleep time on average per day (in hours)", value=0.0)
+    # Option to go back to gender selection
+    if st.button("Back to Gender Selection", key="back"):
+        st.session_state.gender = None
+        st.experimental_rerun()
 
-# Gender selection input (binary choice: Male/Female)
-gender = st.selectbox("Select your gender", options=["Male", "Female"])
+    # Initialize the dictionary to store gender-specific data
+    gender_specific_data = {}
 
-# Age input
-age = st.number_input("Enter your age", value=0)
+    # Helper function for number input with better appearance
+    def number_input_with_none(label, min_value=None):
+        user_input = st.text_input(label)
+        return float(user_input) if user_input else None
 
-# Family history of diabetes input (binary choice: Yes/No)
-family_diabetes = st.selectbox("Do you have a family history of diabetes?", options=["yes", "no"])
+    # Collect common inputs
+    st.markdown("<hr>", unsafe_allow_html=True)
+    # st.markdown("### Common Inputs")
+    age = number_input_with_none("Enter your age")
+    physically_active = st.selectbox(
+        "How much physical activity do you get daily?",
+        options=["", "Less than half an hour", "None", "More than half an hour", "One hour or more"]
+    )
+    bp_level = st.selectbox("What is your blood pressure level?", options=["", "High", "Normal", "Low"])
+    high_bp = st.selectbox("Have you been diagnosed with high blood pressure?", options=["", "Yes", "No"])
+    sleep = number_input_with_none("Average sleep time per day (in hours)")
+    sound_sleep = number_input_with_none("Average hours of sound sleep")
 
-# Physical activity level selection with multiple options
-physically_active = st.selectbox(
-    "On average, how much physical activity do you get per day?",
-    options=["less than half an hr", "none", "more than half an hr", "one hr or more"]
-)
+    # Height and weight for BMI calculation
+    # st.markdown("### Height and Weight for BMI")
+    height_in = number_input_with_none("Height (in inches)")
+    weight_lb = number_input_with_none("Weight (in pounds)")
 
-# Blood pressure level selection (e.g., High, Normal, Low)
-bp_level = st.selectbox(
-    label="What is your blood pressure level?",
-    options=["high", "normal", "low"]
-)
-
-# Diagnosis of high blood pressure (binary choice: Yes/No)
-high_bp = st.selectbox("Have you been diagnosed with high blood pressure?", options=["yes", "no"])
-
-# Collect user input for Continuous Glucose Monitoring (CGM) data
-# Expecting 60 values: 6 features for 10 timesteps (comma-separated)
-time_series_input = st.text_area(
-    "Enter your CGM (Continuous Glucose Monitoring) data: "
-    "Please provide exactly 60 values, comma-separated, with 6 values per timestep for 10 timesteps."
-    "Example: 100,105,110,120,115,100,..."
-)
-
-# Default values for 'Smoking' and 'Alcohol' since these are not provided by the user
-smoking = "no"  # Default value for smoking
-alcohol = "no"  # Default value for alcohol
-
-# Organize user inputs into a dictionary matching the expected feature set
-input_data_dict = {
-    'Pregancies': pregnancies,
-    'BMI': bmi,
-    'SoundSleep': sound_sleep,
-    'Sleep': sleep,
-    'Gender': gender,
-    'Age': age,
-    'Family_Diabetes': family_diabetes,
-    'PhysicallyActive': physically_active,
-    'BPLevel': bp_level,
-    'highBP': high_bp,
-    'Smoking': smoking,   # Default value
-    'Alcohol': alcohol    # Default value
-}
-
-# Convert the input data into a Pandas DataFrame
-input_data = pd.DataFrame([input_data_dict])
-
-# Apply the preprocessor to the structured data (scales numerical features, encodes categorical features)
-structured_input_transformed = structured_data_preprocessor.transform(input_data)
-
-# Convert transformed input into a DataFrame for easier manipulation
-input_data_transformed_df = pd.DataFrame(structured_input_transformed, columns=structured_data_preprocessor.get_feature_names_out())
-
-# Select only the columns (features) that are in the top features list for prediction
-filtered_input_data = input_data_transformed_df[top_features_list]
-
-# Convert the filtered DataFrame to a NumPy array for model input
-filtered_input_data_array = filtered_input_data.to_numpy()
-
-# When the user clicks the "Submit" button, process the inputs and make a prediction
-if st.button("Submit"):
-    if time_series_input:
-        # Convert the CGM data input into a NumPy array
-        time_series_values = np.array([float(x) for x in time_series_input.split(",")])
-
-        # Ensure the input CGM data contains exactly 60 values (6 values per timestep for 10 timesteps)
-        if len(time_series_values) < 60:
-            st.error("Please provide exactly 60 values (10 timesteps, 6 values per timestep).")
-        else:
-            # Reshape the CGM data to match the model's expected input shape (1 sample, 10 timesteps, 6 features)
-            time_series_values = time_series_values.reshape(1, 10, 6)
-
-            # Scale the time-series data
-            time_series_scaled = time_series_scaler.transform(time_series_values.reshape(-1, 6)).reshape(1, 10, 6)
-
-            # Make a prediction using the model (both time-series and structured inputs)
-            prediction = model.predict([time_series_scaled, filtered_input_data_array])
-
-            # Get the predicted class index (e.g., 0, 1, 2, 3)
-            predicted_class = np.argmax(prediction)
-
-            # Map the predicted class index to an actual diagnosis
-            diagnosis_map = {
-                0: "No diabetes",
-                1: "Prediabetes",
-                2: "Type 2 diabetes",
-                3: "Gestational diabetes"
-            }
-
-            # Retrieve the corresponding diagnosis
-            diagnosis = diagnosis_map[predicted_class]
-
-            # Display the predicted diagnosis on the interface
-            st.write("Diagnosis:", diagnosis)
-
-            # Store the input data and prediction results in MongoDB
-            client = MongoClient(mongo_uri)  # Connect to MongoDB
-            db = client['diabetes_data']  # Access the 'diabetes_data' database
-            collection = db['predictions']  # Access the 'predictions' collection
-
-            input_data_dict['cgm_data'] = time_series_input  # Include CGM data in the stored input
-            # Insert the input data and the prediction result into the MongoDB database
-            collection.insert_one({
-                "input_values": input_data_dict,
-                "prediction": prediction.tolist(),  # Convert prediction to a list for storage
-                "diagnosis": diagnosis  # Save the diagnosis result
-            })
+    # Calculate and display BMI
+    if height_in and weight_lb:
+        bmi = (weight_lb * 703) / (height_in ** 2)
+        st.success(f"Your calculated BMI is: **{bmi:.2f}**")
     else:
-        st.write("Please provide CGM data.")  # Error message if CGM data is missing
+        st.warning("Please provide both height and weight for BMI calculation.")
+
+    # Gender-specific inputs
+    if st.session_state.gender == "Female":
+        # st.markdown("### Female-Specific Questions")
+        pregnancies = number_input_with_none("Number of pregnancies")
+        gestation_history = st.selectbox("Have you had gestational diabetes?", options=["", "Yes", "No"])
+        pcos = st.selectbox("Have you been diagnosed with PCOS?", options=["", "Yes", "No"])
+
+        gender_specific_data = {
+            'Pregnancies': pregnancies,
+            'GestationHistory': gestation_history,
+            'PCOS': pcos
+        }
+
+    elif st.session_state.gender == "Male":
+        # st.markdown("### Male-Specific Questions")
+        smoking = st.selectbox("Do you smoke?", options=["", "Yes", "No"])
+        regular_medicine = st.selectbox("Do you take regular medicine?", options=["", "Yes", "No"])
+        stress = st.selectbox("Do you experience high levels of stress?", options=["", "Yes", "No"])
+
+        gender_specific_data = {
+            'Smoking': smoking,
+            'RegularMedicine': regular_medicine,
+            'Stress': stress
+        }
+
+    # CGM Data Input Section
+    st.markdown("### Continuous Glucose Monitoring (CGM) Data")
+    time_series_input = st.text_area(
+        "Enter your CGM data."
+        "comma-separated, 20 values" 
+        "enter in form 00:00:00 (hours:minutes:seconds since midnight): "
+        "For 10 timesteps, 2 values per timestep"
+    )
+
+    # Combine all input data into a dictionary (just for storing purposes)
+    input_data_dict = {
+        'Age': age,
+        'PhysicallyActive': physically_active,
+        'BPLevel': bp_level,
+        'highBP': high_bp,
+        'Sleep': sleep,
+        'SoundSleep': sound_sleep,
+        'BMI': bmi if height_in and weight_lb else "Not calculated",
+        'Gender': 1 if st.session_state.gender == "Male" else 0
+    }
+    input_data_dict.update(gender_specific_data)
+
+    # Handle the "Submit" button
+    if st.button("Submit"):
+        if time_series_input:
+            # Split the input string into a list of values
+            data_list = [item.strip() for item in time_series_input.split(",")]
+            # Check if the number of values is even
+            if len(data_list) % 2 != 0:
+                st.error("Please enter an even number of values for time and value pairs.")
+            elif len(data_list) != 20:
+                st.error("Please 20 values for time and value pairs.")
+            else:
+                # Create a list of tuples (time, value)
+                timesteps = [(data_list[i], data_list[i + 1]) for i in range(0, len(data_list), 2)]
+                # Create a DataFrame from the list of tuples
+                df = pd.DataFrame(timesteps, columns=["Time", "Value"])
+                # Define numerical columns
+                numerical_columns = ['Time', 'Value']
+                df[numerical_columns] = min_max_scaler.fit_transform(df[numerical_columns])
+                flat_list = df.values.flatten().tolist()  # Convert to a flat list of values
+                comma_separated_values = ",".join(map(str, flat_list))  # Join as a single string
+                # Add this string to the input_data_dict
+                input_data_dict['CGMData'] = comma_separated_values
+        else:
+            st.warning("Please provide CGM data.")
+
+        st.write("Currently, no predictions are made as the model is not loaded.")
+        st.info("Note: You would see predictions and diagnosis here if the model was loaded.")
+
+        # # Saving to MongoDB would go here (commented out)
+        # client = MongoClient(mongo_uri)
+        # db = client['diabetes_data']
+        # collection = db['predictions']
+        # collection.insert_one({
+        #     "input_values": input_data_dict,
+        #     "prediction": "Placeholder",
+        #     "diagnosis": "Placeholder"
+        # })
