@@ -1,6 +1,5 @@
 import streamlit as st
 import numpy as np
-import joblib
 import xgboost as xgb
 import pandas as pd
 from pymongo import MongoClient
@@ -154,11 +153,73 @@ else:
             predicted_class = np.argmax(structured_probs)
             st.success(f"The predicted class is: {class_labels[predicted_class]} with probability {np.max(structured_probs):.2f}")
 
+            # Recommendations for female based on the predicted class
+            if predicted_class == 0:  # No diabetes
+                st.info(
+                    "**Recommendation**: To reduce the risk of diabetes in the future: \n"
+                    "- Maintain a balanced diet rich in fruits and vegetables. \n"
+                    "- Engage in regular physical activity (at least 30 minutes daily). \n"
+                    "- Monitor your weight and ensure a healthy BMI. \n"
+                    "- Get regular health check-ups, especially if you have a family history of diabetes. \n"
+                    "- If you had gestational diabetes during pregnancy, monitor blood sugar levels post-pregnancy as you may be at higher risk of developing type 2 diabetes."
+                )
+                # Additional feature-based recommendations
+                if input_data_dict['PhysicallyActive'] in ["None", "Less than half an hour"]:
+                    st.warning("Consider increasing your daily physical activity to at least 30 minutes to reduce the risk of diabetes.")
+                if bmi and bmi >= 25:
+                    st.warning("Your BMI indicates that you are overweight. Consider adopting a balanced diet and exercise plan to achieve a healthier BMI.")
+
+            elif predicted_class == 3:  # Gestational diabetes
+                st.info(
+                    "**Recommendation**: Since you have been predicted with **gestational diabetes**: \n"
+                    "- Follow your doctor’s advice closely to manage blood sugar levels during pregnancy. \n"
+                    "- Maintain a healthy diet and engage in moderate physical activity. \n"
+                    "- Post-pregnancy, continue monitoring your blood sugar levels as gestational diabetes can increase the risk of developing type 2 diabetes later in life."
+                )
+
+            else:  # Diabetes or prediabetes
+                st.info(
+                    "**Recommendation**: Since you have been predicted as diabetic or prediabetic: \n"
+                    "- Consult a healthcare provider for personalized care. \n"
+                    "- Regularly monitor your blood glucose levels. \n"
+                    "- Follow a healthy eating plan recommended by a dietitian. \n"
+                    "- Exercise regularly (at least 150 minutes of moderate activity per week). \n"
+                    "- Take any prescribed medications on time. \n"
+                    "- Consider regular screenings for heart health, as diabetes increases cardiovascular risks."
+                )
+
         elif st.session_state.gender == "Male":
             structured_probs = male_structured_model.predict(d_matrix)
             predicted_class = np.argmax(structured_probs)
             st.success(f"The predicted class is: {class_labels[predicted_class]} with probability {np.max(structured_probs):.2f}")
-        
+            
+            # Recommendations for male based on the predicted class
+            if predicted_class == 0:  # No diabetes
+                st.info(
+                    "**Recommendation**: To lower the risk of future diabetes: \n"
+                    "- Incorporate regular physical activity into your daily routine (at least 30 minutes or more). \n"
+                    "- Avoid smoking and excessive alcohol consumption. \n"
+                    "- Eat a balanced diet and limit processed foods and sugars. \n"
+                    "- Maintain a healthy weight and get regular health check-ups."
+                )
+                # Additional feature-based recommendations
+                if input_data_dict['Smoking'] == "Yes":
+                    st.warning("Smoking can increase the risk of diabetes. Consider quitting smoking for better health.")
+                if bmi and bmi >= 25:
+                    st.warning("Your BMI indicates you are overweight. A healthy BMI reduces the risk of diabetes.")
+                if input_data_dict['PhysicallyActive'] in ["None", "Less than half an hour"]:
+                    st.warning("Consider increasing your physical activity to at least 30 minutes daily to reduce the risk of diabetes.")
+
+            else:  # Diabetes or prediabetes
+                st.info(
+                    "**Recommendation**: Based on your diagnosis of diabetes or prediabetes: \n"
+                    "- Visit a healthcare professional for guidance. \n"
+                    "- Keep track of your blood sugar levels regularly. \n"
+                    "- Engage in regular physical activity (such as brisk walking or cycling). \n"
+                    "- Follow your prescribed medications and treatment plan diligently. \n"
+                    "- Consider adopting a diet low in refined sugars and saturated fats."
+                )
+
         # Prepare the entry for MongoDB
         entry = {
             **input_data_encoded,
@@ -170,4 +231,3 @@ else:
         # Insert entry into MongoDB
         collection.insert_one(entry)
         st.success("Data successfully uploaded to MongoDB!")
-
