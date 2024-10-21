@@ -2,6 +2,7 @@ import streamlit as st
 import numpy as np
 import joblib
 import xgboost as xgb
+import pandas as pd
 from pymongo import MongoClient
 import os
 from dotenv import load_dotenv
@@ -21,7 +22,6 @@ client = MongoClient(mongo_uri)
 db = client['DiabetesRepo']  # replace with your database name
 collection = db['Diabetes Prediction Data']  # replace with your collection name
 
-
 # Streamlit session state for gender selection
 if 'gender' not in st.session_state:
     st.session_state.gender = None
@@ -38,7 +38,7 @@ def custom_label_encode(value, key):
         'BPLevel': {"Normal": 0, "Low": 1, "High": 2},
         'PhysicallyActive': {"None": 0, "Less than half an hour": 1, "More than half an hour": 2, "One hour or more": 3},
         'HighBP': {"No": 0, "Yes": 1},
-        'GestationHistory': {"No": 0, "Yes": 1},
+        'Gestation in previous Pregnancy': {"No": 0, "Yes": 1},
         'PCOS': {"No": 0, "Yes": 1},
         'Smoking': {"No": 0, "Yes": 1},
         'RegularMedicine': {"No": 0, "Yes": 1},
@@ -96,7 +96,7 @@ else:
         pregnancies = number_input_with_none("Number of pregnancies")
         gestation_history = st.selectbox("Have you had gestational diabetes?", options=["", "Yes", "No"])
         pcos = st.selectbox("Have you been diagnosed with PCOS?", options=["", "Yes", "No"])
-        gender_specific_data = {'Pregnancies': pregnancies, 'GestationHistory': gestation_history, 'PCOS': pcos}
+        gender_specific_data = {'Pregnancies': pregnancies, 'Gestation in previous Pregnancy': gestation_history, 'PCOS': pcos}
         
         # Mock CGM input field for demonstration purposes
         cgm_input = st.text_area("Enter your CGM data (mock input), comma-separated, 20 values. Example: time1,value1,time2,value2,...")
@@ -116,8 +116,7 @@ else:
         'HighBP': high_bp,
         'Sleep': sleep,
         'SoundSleep': sound_sleep,
-        'BMI': bmi if height_in and weight_lb else "Not calculated",
-        'Gender': st.session_state.gender
+        'BMI': bmi if height_in and weight_lb else None
     }
     input_data_dict.update(gender_specific_data)
 
@@ -127,8 +126,10 @@ else:
 
         # Encode categorical variables
         for key in input_data_dict.keys():
-            if isinstance(input_data_dict[key], str) and input_data_dict[key] and key != 'Gender':
+            if isinstance(input_data_dict[key], str) and input_data_dict[key]:
                 input_data_encoded[key] = custom_label_encode(input_data_dict[key], key)
+            else:
+                input_data_encoded[key] = input_data_dict[key]  # Include numeric inputs as is
 
         st.warning(f"Encoded categorical data: {input_data_encoded}")
 
@@ -136,16 +137,25 @@ else:
         if st.session_state.gender == "Female" and cgm_input:
             st.info(f"Mock CGM Data Received: {cgm_input}")
         
+        # Convert to DataFrame for prediction
+        input_data_df = pd.DataFrame([input_data_encoded])  # Create DataFrame from dictionary
+
+        # Define the expected feature names as they were during model training
+        expected_feature_names = ['Age', 'HighBP', 'PhysicallyActive', 'BMI', 'Sleep', 'SoundSleep', 'BPLevel', 'Pregnancies', 'Gestation in previous Pregnancy', 'PCOS']
+        
+        # Reorder the DataFrame to match the expected feature names
+        input_data_df = input_data_df.reindex(columns=expected_feature_names)
+        # Create the DMatrix
+        d_matrix = xgb.DMatrix(data=input_data_df)
+
         # Prediction using the structured model
         if st.session_state.gender == "Female":
-            dmatrix_female = xgb.DMatrix(np.array([list(input_data_encoded.values())]))
-            structured_probs = female_structured_model.predict(dmatrix_female)
+            structured_probs = female_structured_model.predict(d_matrix)
             predicted_class = np.argmax(structured_probs)
             st.success(f"The predicted class is: {class_labels[predicted_class]} with probability {np.max(structured_probs):.2f}")
 
         elif st.session_state.gender == "Male":
-            dmatrix_male = xgb.DMatrix(np.array([list(input_data_encoded.values())]))
-            structured_probs = male_structured_model.predict(dmatrix_male)
+            structured_probs = male_structured_model.predict(d_matrix)
             predicted_class = np.argmax(structured_probs)
             st.success(f"The predicted class is: {class_labels[predicted_class]} with probability {np.max(structured_probs):.2f}")
         
@@ -154,12 +164,10 @@ else:
             **input_data_encoded,
             'Gender': st.session_state.gender,
             'class_probabilities': structured_probs.tolist(),  # Convert to list for JSON serialization
-            'prediction': predicted_class,
+            'prediction': int(predicted_class),  # Ensure prediction is a standard integer
             'diagnosis': class_labels[predicted_class]
         }
-
         # Insert entry into MongoDB
         collection.insert_one(entry)
         st.success("Data successfully uploaded to MongoDB!")
-        
-        
+
