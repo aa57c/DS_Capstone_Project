@@ -5,6 +5,7 @@ import pandas as pd
 from pymongo import MongoClient
 import os
 from dotenv import load_dotenv
+import hashlib
 
 # Load the pre-trained models
 female_structured_model = xgb.Booster()
@@ -18,11 +19,38 @@ mongo_uri = os.getenv("MONGO_DB_CONN_URL")
 
 # Connect to MongoDB
 client = MongoClient(mongo_uri)
-db = client['DiabetesRepo']  # replace with your database name
-collection = db['Diabetes Prediction Data']  # replace with your collection name
+diabetes_db = client['DiabetesRepo']
+predictions_collection = diabetes_db['Diabetes_Prediction_Data']
+user_db = client['Users']
+credentials_collection = user_db['Credentials']
 
-# Streamlit session state for gender selection
-if 'gender' not in st.session_state:
+# Function to hash passwords
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
+# Function to check if user exists in the database
+def check_user_credentials(username, password):
+    hashed_password = hash_password(password)
+    user = credentials_collection.find_one({"username": username, "password": hashed_password})
+    return user
+
+# Sign-up function
+def sign_up_user(username, password):
+    hashed_password = hash_password(password)
+    credentials_collection.insert_one({
+        "username": username,
+        "password": hashed_password,
+        "gender": None  # Gender will be added after login
+    })
+
+# Update gender in the database
+def update_user_gender(username, gender):
+    credentials_collection.update_one({"username": username}, {"$set": {"gender": gender}})
+
+# Streamlit session state for managing login/signup
+if 'logged_in' not in st.session_state:
+    st.session_state.logged_in = False
+    st.session_state.username = None
     st.session_state.gender = None
 
 # Helper function to add style to sections
@@ -53,19 +81,62 @@ class_labels = {
     3: "Gestational diabetes"
 }
 
-# Page 1: Gender Selection
-if st.session_state.gender is None or st.session_state.gender == "Select your gender":
-    styled_header("Diabetes Prediction App")
-    st.session_state.gender = st.selectbox("Select your gender", options=["Select your gender", "Male", "Female"])
-    if st.session_state.gender != "Select your gender":
-        st.rerun()
+# Sign-up/Login Page
+if not st.session_state.logged_in:
+    styled_header("Diabetes Prediction App - Sign Up / Login")
 
-# Gender-Specific Questions
+    # Username and password input
+    username = st.text_input("Enter your username")
+    password = st.text_input("Enter your password", type="password")
+
+    # Check if both fields are filled before enabling buttons
+    if username and password:
+        if st.button("Sign Up"):
+            # Check if user already exists
+            if credentials_collection.find_one({"username": username}):
+                st.warning("Username already exists. Please choose a different one.")
+            else:
+                # Sign up the user without gender (gender is selected after login)
+                sign_up_user(username, password)
+                st.success("Sign up successful! You can now log in.")
+
+        if st.button("Log In"):
+            # Validate login credentials
+            user = check_user_credentials(username, password)
+            if user:
+                st.session_state.logged_in = True
+                st.session_state.username = username
+                st.session_state.gender = user['gender']
+                if st.session_state.gender:
+                    st.success(f"Welcome back, {username}!")
+                else:
+                    st.info(f"Please select your gender, {username}.")
+                st.rerun()  # Refresh the app to load the next step
+            else:
+                st.error("Invalid username or password.")
+    else:
+        st.info("Please fill out both fields to enable sign-up and login.")
+
+# Gender Selection Page (if gender not yet selected)
+elif not st.session_state.gender:
+    styled_header(f"Welcome {st.session_state.username}!")
+
+    # Gender selection
+    gender = st.selectbox("Select your gender", options=["Select your gender", "Male", "Female"])
+
+    if gender != "Select your gender" and st.button("Submit"):
+        st.session_state.gender = gender
+        update_user_gender(st.session_state.username, gender)
+        st.success(f"Gender selection successful! You can now proceed.")
+        st.rerun()  # Refresh the app to load the prediction page
+
+# Gender-Specific Prediction Page (once logged in and gender selected)
 else:
-    styled_header(f"Questionnaire for {st.session_state.gender} Patients")
-    st.markdown("Please fill out the details carefully. Accurate information helps in better prediction.")
-    
-    if st.button("Back to Gender Selection", key="back"):
+    styled_header(f"Welcome {st.session_state.username}, Questionnaire for {st.session_state.gender} Patients")
+
+    if st.button("Log Out"):
+        st.session_state.logged_in = False
+        st.session_state.username = None
         st.session_state.gender = None
         st.rerun()
 
@@ -75,7 +146,7 @@ else:
     def number_input_with_none(label):
         user_input = st.text_input(label)
         return float(user_input) if user_input else None
-
+    
     age = number_input_with_none("Enter your age")
     physically_active = st.selectbox("How much physical activity do you get daily?", options=["", "Less than half an hour", "None", "More than half an hour", "One hour or more"])
     bp_level = st.selectbox("What is your blood pressure level?", options=["", "High", "Normal", "Low"])
@@ -91,23 +162,28 @@ else:
     else:
         st.warning("Please provide both height and weight for BMI calculation.")
 
+    # Gender-Specific Questions
     if st.session_state.gender == "Female":
-        pregnancies = number_input_with_none("Number of pregnancies")
+        # (Prediction flow for females here, same as before...)
+        pregnancies = st.number_input("Number of pregnancies", min_value=0, step=1)
         gestation_history = st.selectbox("Have you had gestational diabetes?", options=["", "Yes", "No"])
         pcos = st.selectbox("Have you been diagnosed with PCOS?", options=["", "Yes", "No"])
-        gender_specific_data = {'Pregnancies': pregnancies, 'Gestation in previous Pregnancy': gestation_history, 'PCOS': pcos}
-        
+        # Add rest of the female-specific questions and logic...
         # Mock CGM input field for demonstration purposes
         cgm_input = st.text_area("Enter your CGM data (mock input), comma-separated, 20 values. Example: time1,value1,time2,value2,...")
-
+        gender_specific_data = {'Pregnancies': pregnancies, 'Gestation in previous Pregnancy': gestation_history, 'PCOS': pcos}
+        
+    
     elif st.session_state.gender == "Male":
+        # (Prediction flow for males here, same as before...)
         smoking = st.selectbox("Do you smoke?", options=["", "Yes", "No"])
         regular_medicine = st.selectbox("Do you take regular medicine for diabetes?", options=["", "Yes", "No"])
         stress = st.selectbox("Do you experience high levels of stress?", options=["", "Yes", "No"])
-        gender_specific_data = {'Smoking': smoking, 'RegularMedicine': regular_medicine, 'Stress': stress}
-        # Mock CGM input field for demonstration purposes
+        # Add rest of the male-specific questions and logic...
         cgm_input = st.text_area("Enter your CGM data (mock input), comma-separated, 20 values. Example: time1,value1,time2,value2,...")
+        gender_specific_data = {'Smoking': smoking, 'RegularMedicine': regular_medicine, 'Stress': stress}
 
+    # The rest of the prediction code remains the same...
     input_data_dict = {
         'Age': age,
         'PhysicallyActive': physically_active,
@@ -139,16 +215,14 @@ else:
         # Convert to DataFrame for prediction
         input_data_df = pd.DataFrame([input_data_encoded])  # Create DataFrame from dictionary
 
-        # Define the expected feature names as they were during model training
-        expected_feature_names = ['Age', 'HighBP', 'PhysicallyActive', 'BMI', 'Sleep', 'SoundSleep', 'BPLevel', 'Pregnancies', 'Gestation in previous Pregnancy', 'PCOS']
-        
-        # Reorder the DataFrame to match the expected feature names
-        input_data_df = input_data_df.reindex(columns=expected_feature_names)
-        # Create the DMatrix
-        d_matrix = xgb.DMatrix(data=input_data_df)
-
         # Prediction using the structured model
         if st.session_state.gender == "Female":
+            # Define the expected feature names as they were during model training
+            expected_feature_names = ['Age', 'HighBP', 'PhysicallyActive', 'BMI', 'Sleep', 'SoundSleep', 'BPLevel', 'Pregnancies', 'Gestation in previous Pregnancy', 'PCOS']
+            # Reorder the DataFrame to match the expected feature names
+            input_data_df = input_data_df.reindex(columns=expected_feature_names)
+            # Create the DMatrix
+            d_matrix = xgb.DMatrix(data=input_data_df)
             structured_probs = female_structured_model.predict(d_matrix)
             predicted_class = np.argmax(structured_probs)
             st.success(f"The predicted class is: {class_labels[predicted_class]} with probability {np.max(structured_probs):.2f}")
@@ -189,6 +263,13 @@ else:
                 )
 
         elif st.session_state.gender == "Male":
+            # Define the expected feature names as they were during model training
+            expected_feature_names = ['Age', 'HighBP', 'PhysicallyActive', 'BMI', 'Smoking', 'Sleep', 'SoundSleep', 'RegularMedicine', 'Stress', 'BPLevel']
+            # Reorder the DataFrame to match the expected feature names
+            input_data_df = input_data_df.reindex(columns=expected_feature_names)
+            # Create the DMatrix
+            d_matrix = xgb.DMatrix(data=input_data_df)
+
             structured_probs = male_structured_model.predict(d_matrix)
             predicted_class = np.argmax(structured_probs)
             st.success(f"The predicted class is: {class_labels[predicted_class]} with probability {np.max(structured_probs):.2f}")
@@ -222,12 +303,14 @@ else:
 
         # Prepare the entry for MongoDB
         entry = {
+            'username': st.session_state.username,
             **input_data_encoded,
-            'Gender': st.session_state.gender,
             'class_probabilities': structured_probs.tolist(),  # Convert to list for JSON serialization
             'prediction': int(predicted_class),  # Ensure prediction is a standard integer
-            'diagnosis': class_labels[predicted_class]
+            'diagnosis': class_labels[predicted_class],
         }
         # Insert entry into MongoDB
-        collection.insert_one(entry)
+        predictions_collection.insert_one(entry)
         st.success("Data successfully uploaded to MongoDB!")
+
+
