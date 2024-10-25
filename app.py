@@ -127,6 +127,7 @@ elif not st.session_state.gender:
     if gender != "Select your gender" and st.button("Submit"):
         st.session_state.gender = gender
         update_user_gender(st.session_state.username, gender)
+        predictions_collection.insert_one({'username': st.session_state.username, 'data': []})
         st.success(f"Gender selection successful! You can now proceed.")
         st.rerun()  # Refresh the app to load the prediction page
 
@@ -302,15 +303,13 @@ else:
                 )
 
         # Prepare the entry for MongoDB
-        entry = {
-            'username': st.session_state.username,
-            **input_data_encoded,
-            'class_probabilities': structured_probs.tolist(),  # Convert to list for JSON serialization
-            'prediction': int(predicted_class),  # Ensure prediction is a standard integer
-            'diagnosis': class_labels[predicted_class],
-        }
+        query = {'username': st.session_state.username}
+        new_value = {**input_data_encoded, 'class_probabilities': structured_probs.tolist(),  # Convert to list for JSON serialization
+        'prediction': int(predicted_class),  # Ensure prediction is a standard integer
+        'diagnosis': class_labels[predicted_class]}
+        update = {'$push': {'data': new_value}}
         # Insert entry into MongoDB
-        predictions_collection.insert_one(entry)
+        predictions_collection.update_one(query, update)
         st.success("Data successfully uploaded to MongoDB!")
 
 
