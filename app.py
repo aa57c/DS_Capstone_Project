@@ -6,6 +6,7 @@ from pymongo import MongoClient
 import os
 from dotenv import load_dotenv
 import hashlib
+import datetime
 
 # Load the pre-trained models
 female_structured_model = xgb.Booster()
@@ -476,6 +477,9 @@ else:
                     "- Follow your prescribed medications and treatment plan diligently. \n"
                     "- Consider adopting a diet low in refined sugars and saturated fats."
                 )
+        
+        # Add timestamp to the input data dictionary
+        input_data_dict['timestamp'] = datetime.datetime.now()
 
         # Prepare the entry for MongoDB
         query = {'username': st.session_state.username}
