@@ -163,7 +163,8 @@ else:
     st.write("Have you been diagnosed with high blood pressure?")
     selected_high_bp = st.radio(
         "Select your option:",
-        options=list(binary_yes_no_options.keys())
+        options=list(binary_yes_no_options.keys()),
+        key="high_bp_key"
     )
     # Retrieve the encoded value for the selected option
     high_bp = binary_yes_no_options[selected_high_bp]
@@ -236,19 +237,22 @@ else:
     st.write("Are you diagnosed with high cholesterol?")
     selected_high_chol_option = st.radio(
         "Select your option:",
-        options=list(binary_yes_no_options.keys())
+        options=list(binary_yes_no_options.keys()),
+        key="high_chol_key"
     )
     high_chol = binary_yes_no_options[selected_high_chol_option]
 
     st.write("Do you consume fruit per day?")
     selected_fruit_option = st.radio(
         "Select your option:",
-        options=list(binary_yes_no_options.keys())
+        options=list(binary_yes_no_options.keys()),
+        key="fruits_key"
     )
     st.write("Do you consume vegetables per day?")
     selected_veggies_option = st.radio(
         "Select your option:",
-        options=list(binary_yes_no_options.keys())
+        options=list(binary_yes_no_options.keys()),
+        key="veggies_key"
     )
 
     fruits = binary_yes_no_options[selected_fruit_option]
@@ -264,7 +268,8 @@ else:
     st.write("How would you describe your general health?")
     selected_gen_hlth_option = st.radio(
         "Would you say that in general your health is:",
-        options=list(gen_hlth_options.keys())
+        options=list(gen_hlth_options.keys()),
+        key="gen_hlth_key"
     )
     gen_hlth = gen_hlth_options[selected_gen_hlth_option]
 
@@ -273,7 +278,8 @@ else:
     st.write("Have you experienced sudden loss of weight? (a loss of more than 5 percent of your body weight)")
     selected_weight_loss_option = st.radio(
         "Select your option:",
-        options=list(binary_yes_no_options.keys())
+        options=list(binary_yes_no_options.keys()),
+        key='weight_loss_key'
     )
 
     sudden_weight_loss = binary_yes_no_options[selected_weight_loss_option]
@@ -281,14 +287,16 @@ else:
     st.write("Have you experienced any blurred vision this week?")
     selected_visual_blur_option = st.radio(
         "Select your option:",
-        options=list(binary_yes_no_options.keys())
+        options=list(binary_yes_no_options.keys()),
+        key="blurred_vision_key"
     )
     visual_blurring = binary_yes_no_options[selected_visual_blur_option]
 
     st.write("If you got injured, did you notice if your wound was healing slowly?")
     selected_healing_option = st.radio(
         "Select your option:",
-        options=list(binary_yes_no_options.keys())   
+        options=list(binary_yes_no_options.keys()),
+        key="delayed_healing_key"   
     )
     delayed_healing = binary_yes_no_options[selected_healing_option]
 
@@ -299,7 +307,8 @@ else:
         st.write("Have you had gestational diabetes before in those pregnancies?")
         selected_gestational_hist_option = st.radio(
             "Select your option:",
-            options=list(binary_yes_no_options.keys())   
+            options=list(binary_yes_no_options.keys()),
+            key="gestation_hist_key"      
         )
         gestation_history = binary_yes_no_options[selected_gestational_hist_option]
 
@@ -307,14 +316,16 @@ else:
         st.write("Are you currently pregnant?")
         selected_pregnant_option = st.radio(
             "Select your option:",
-            options=list(binary_yes_no_options.keys())   
+            options=list(binary_yes_no_options.keys()),
+            key="pregnant_key"         
         )
         pregnant = binary_yes_no_options[selected_pregnant_option]
 
         st.write("Have you been diagnosed with PCOS?")
         selected_pcos_option = st.radio(
             "Select your option:",
-            options=list(binary_yes_no_options.keys())   
+            options=list(binary_yes_no_options.keys()),
+            key="pcos_key"   
         )
         pcos = binary_yes_no_options[selected_pcos_option]
 
