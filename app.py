@@ -364,10 +364,8 @@ else:
         
 
     if st.button("Submit"):
-        
         # Convert to DataFrame for prediction
         input_data_df = pd.DataFrame([input_data_dict])  # Create DataFrame from dictionary
-
         # Prediction using the structured model
         if st.session_state.gender == "Female":
             # Define the expected feature names as they were during model training
@@ -396,7 +394,7 @@ else:
                     "- If you had gestational diabetes during pregnancy, monitor blood sugar levels post-pregnancy as you may be at higher risk of developing type 2 diabetes."
                 )
                 # Additional feature-based recommendations
-                if input_data_dict['PhysicallyActive'] in ["None", "Less than half an hour"]:
+                if input_data_dict['PhysicallyActive'] in [0, 1]:
                     st.warning("Consider increasing your daily physical activity to at least 30 minutes to reduce the risk of diabetes.")
                 if bmi and bmi >= 25:
                     st.warning("Your BMI indicates that you are overweight. Consider adopting a balanced diet and exercise plan to achieve a healthier BMI.")
@@ -437,16 +435,12 @@ else:
                 st.info(
                     "**Recommendation**: To lower the risk of future diabetes: \n"
                     "- Incorporate regular physical activity into your daily routine (at least 30 minutes or more). \n"
-                    "- Avoid smoking and excessive alcohol consumption. \n"
                     "- Eat a balanced diet and limit processed foods and sugars. \n"
                     "- Maintain a healthy weight and get regular health check-ups."
                 )
-                # Additional feature-based recommendations
-                if input_data_dict['Smoking'] == "Yes":
-                    st.warning("Smoking can increase the risk of diabetes. Consider quitting smoking for better health.")
                 if bmi and bmi >= 25:
                     st.warning("Your BMI indicates you are overweight. A healthy BMI reduces the risk of diabetes.")
-                if input_data_dict['PhysicallyActive'] in ["None", "Less than half an hour"]:
+                if input_data_dict['PhysicallyActive'] in [0, 1]:
                     st.warning("Consider increasing your physical activity to at least 30 minutes daily to reduce the risk of diabetes.")
 
             else:  # Diabetes or prediabetes
