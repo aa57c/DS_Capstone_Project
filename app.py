@@ -136,21 +136,6 @@ else:
         return float(user_input) if user_input else None
     
     input_data_dict = {}
-    
-    '''
-    Features used for Female:
-    ['PCOS', 'Pregnancies', 'Pregnant', 'Gestation in previous Pregnancy']
-
-    Features used for Male:
-    ['Age', 'HighBP', 'PhysicallyActive', 'BMI', 'Sleep', 'SoundSleep',
-    'JunkFood', 'BPLevel', 'UriationFreq', 'Fruits', 'Veggies', 'GenHlth',
-    'PhysHlth', 'sudden weight loss', 'visual blurring', 'delayed healing']
-    
-    Features used for Both:
-    ['Age', 'HighBP', 'PhysicallyActive', 'BMI', 'Sleep', 'SoundSleep',
-    'JunkFood', 'BPLevel', 'UriationFreq', 'Fruits', 'Veggies', 'GenHlth',
-    'PhysHlth', 'sudden weight loss', 'visual blurring', 'delayed healing']
-    '''
 
     binary_yes_no_options = {
         "Yes": 1,
@@ -333,15 +318,6 @@ else:
         # Mock CGM input field for demonstration purposes
         # cgm_input = st.text_area("Enter your CGM data (mock input), comma-separated, 20 values. Example: time1,value1,time2,value2,...")
 
-        '''
-        'Age', 'HighBP', 'PhysicallyActive', 'BMI', 'Sleep', 'SoundSleep',
-       'JunkFood', 'BPLevel', 'Pregnancies', 'UriationFreq', 'HighChol',
-       'Fruits', 'Veggies', 'GenHlth', 'PhysHlth',
-       'Gestation in previous Pregnancy', 'PCOS', 'sudden weight loss',
-       'visual blurring', 'delayed healing', 'Pregnant']
-        
-        '''
-
         input_data_dict = {
             'Age': age,
             'HighBP': high_bp,
@@ -366,12 +342,6 @@ else:
             "Pregnant": pregnant
         }
     elif st.session_state.gender == "Male":
-        '''
-        ['Age', 'HighBP', 'PhysicallyActive', 'BMI', 'Sleep', 'SoundSleep',
-       'JunkFood', 'BPLevel', 'UriationFreq', 'HighChol', 'Fruits', 'Veggies',
-       'GenHlth', 'PhysHlth', 'sudden weight loss', 'visual blurring',
-       'delayed healing']
-        '''
         input_data_dict = {
             'Age': age,
             'HighBP': high_bp,
