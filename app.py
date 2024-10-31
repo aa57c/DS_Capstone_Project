@@ -59,19 +59,6 @@ def styled_header(title, subtitle=None):
     if subtitle:
         st.markdown(f"<h3 style='color: #555;'>{subtitle}</h3>", unsafe_allow_html=True)
 
-# Custom label encoding function
-def custom_label_encode(value, key):
-    encoding_dicts = {
-        'BPLevel': {"Normal": 0, "Low": 1, "High": 2},
-        'PhysicallyActive': {"None": 0, "Less than half an hour": 1, "More than half an hour": 2, "One hour or more": 3},
-        'HighBP': {"No": 0, "Yes": 1},
-        'Gestation in previous Pregnancy': {"No": 0, "Yes": 1},
-        'PCOS': {"No": 0, "Yes": 1},
-        'Smoking': {"No": 0, "Yes": 1},
-        'RegularMedicine': {"No": 0, "Yes": 1},
-        'Stress': {"No": 0, "Yes": 1}
-    }
-    return encoding_dicts.get(key, {}).get(value, value)
 
 # Define class labels
 class_labels = {
@@ -141,12 +128,13 @@ else:
         st.session_state.gender = None
         st.rerun()
 
-    gender_specific_data = {}
     
     # Number input function
     def number_input_with_none(label):
         user_input = st.text_input(label)
         return float(user_input) if user_input else None
+    
+    input_data_dict = {}
     
     '''
     Features used for Female:
@@ -162,78 +150,251 @@ else:
     'JunkFood', 'BPLevel', 'UriationFreq', 'Fruits', 'Veggies', 'GenHlth',
     'PhysHlth', 'sudden weight loss', 'visual blurring', 'delayed healing']
     '''
+
+    binary_yes_no_options = {
+        "Yes": 1,
+        "No" : 0
+    }
+
+
     age = number_input_with_none("Enter your age")
-    physically_active = st.selectbox("How much physical activity do you get daily?", options=["", "Less than half an hour", "None", "More than half an hour", "One hour or more"])
-    bp_level = st.selectbox("What is your blood pressure level?", options=["", "High", "Normal", "Low"])
-    high_bp = st.selectbox("Have you been diagnosed with high blood pressure?", options=["", "Yes", "No"])
-    sleep = number_input_with_none("Average sleep time per day (in hours)")
-    sound_sleep = number_input_with_none("Average hours of sound sleep")
+
+    st.write("Have you been diagnosed with high blood pressure?")
+    selected_high_bp = st.radio(
+        "Select your option:",
+        options=list(binary_yes_no_options.keys())
+    )
+    # Retrieve the encoded value for the selected option
+    high_bp = binary_yes_no_options[selected_high_bp]
+
+    st.write("How many days per week are you typically physically active? Please select the option that best describes your activity level.")
+    physical_activity_options = {
+    "Not Active (Rarely or never active during the week)": 0,
+    "Lightly Active (1-2 days per week with light physical activity)": 1,
+    "Moderately Active (3-4 days per week, moderate activities like brisk walking)": 2,
+    "Very Active (5 or more days per week, vigorous activities like running)": 3
+    }
+    # Create a radio button for activity level selection
+    selected_physical_activity = st.radio(
+        "Select your physical activity level per week:",
+        options=list(physical_activity_options.keys())
+    )
+
+    physicallyactive = physical_activity_options[selected_physical_activity]
+
     height_in = number_input_with_none("Height (in inches)")
     weight_lb = number_input_with_none("Weight (in pounds)")
-
     if height_in and weight_lb:
         bmi = (weight_lb * 703) / (height_in ** 2)
         st.success(f"Your calculated BMI is: **{bmi:.2f}**")
     else:
         st.warning("Please provide both height and weight for BMI calculation.")
+    
+    sleep = number_input_with_none("Average sleep time per day (in hours)")
+    sound_sleep = number_input_with_none("Average hours of sound sleep (sleep when you are lying completely still)")
+
+    st.write("How often do you eat junk food (foods high in sugar and cholesterol) per week?")
+    junk_food_options = {
+        "Occasionally": 0,
+        "Often": 1,
+        "Very Often": 2,
+        "Always": 3
+    }
+    selected_junk_food = st.radio(
+        "Select how often you eat junk food:",
+        options=list(junk_food_options.keys())
+    )
+
+    junkfood = junk_food_options[selected_junk_food]
+
+    st.write("What is your blood pressure level?")
+    bp_level_options = {
+        "Normal": 0,
+        "Low": 1,
+        "High": 2
+    }
+    selected_bp_level = st.radio(
+        "Select your blood pressure level:",
+        options=list(bp_level_options.keys())
+    )
+    bp_level = bp_level_options[selected_bp_level]
+
+    st.write("How often do you have to urinate per day?")
+    urination_freq_options = {
+        "Roughly 4 to 7 times per day": 0,
+        "More than 7 to 10 times per day": 1,
+    }
+
+    selected_urination_freq = st.radio(
+        "Select how frequently you urinate per day:",
+        options=list(urination_freq_options.keys())
+    )
+
+    urinationfreq = urination_freq_options[selected_urination_freq]
+
+    st.write("Are you diagnosed with high cholesterol?")
+    selected_high_chol_option = st.radio(
+        "Select your option:",
+        options=list(binary_yes_no_options.keys())
+    )
+    high_chol = binary_yes_no_options[selected_high_chol_option]
+
+    st.write("Do you consume fruit per day?")
+    selected_fruit_option = st.radio(
+        "Select your option:",
+        options=list(binary_yes_no_options.keys())
+    )
+    st.write("Do you consume vegetables per day?")
+    selected_veggies_option = st.radio(
+        "Select your option:",
+        options=list(binary_yes_no_options.keys())
+    )
+
+    fruits = binary_yes_no_options[selected_fruit_option]
+    veggies = binary_yes_no_options[selected_veggies_option]
+
+    gen_hlth_options = {
+        "Excellent": 1,
+        "Very Good": 2,
+        "Good": 3,
+        "Fair": 4,
+        "Poor": 5
+    }
+    st.write("How would you describe your general health?")
+    selected_gen_hlth_option = st.radio(
+        "Would you say that in general your health is:",
+        options=list(gen_hlth_options.keys())
+    )
+    gen_hlth = gen_hlth_options[selected_gen_hlth_option]
+
+    phys_hlth = number_input_with_none("Now thinking about your physical health, which includes physical illness and injury, for how many days during the past 30 days was your physical health not good?")
+
+    st.write("Have you experienced sudden loss of weight? (a loss of more than 5 percent of your body weight)")
+    selected_weight_loss_option = st.radio(
+        "Select your option:",
+        options=list(binary_yes_no_options.keys())
+    )
+
+    sudden_weight_loss = binary_yes_no_options[selected_weight_loss_option]
+
+    st.write("Have you experienced any blurred vision this week?")
+    selected_visual_blur_option = st.radio(
+        "Select your option:",
+        options=list(binary_yes_no_options.keys())
+    )
+    visual_blurring = binary_yes_no_options[selected_visual_blur_option]
+
+    st.write("If you got injured, did you notice if your wound was healing slowly?")
+    selected_healing_option = st.radio(
+        "Select your option:",
+        options=list(binary_yes_no_options.keys())   
+    )
+    delayed_healing = binary_yes_no_options[selected_healing_option]
 
     # Gender-Specific Questions
     if st.session_state.gender == "Female":
         # (Prediction flow for females here, same as before...)
-        pregnancies = st.number_input("Number of pregnancies", min_value=0, step=1)
-        gestation_history = st.selectbox("Have you had gestational diabetes?", options=["", "Yes", "No"])
-        pcos = st.selectbox("Have you been diagnosed with PCOS?", options=["", "Yes", "No"])
+        pregnancies = st.number_input("How many pregnancies have you had?", min_value=0, step=1)
+        st.write("Have you had gestational diabetes before in those pregnancies?")
+        selected_gestational_hist_option = st.radio(
+            "Select your option:",
+            options=list(binary_yes_no_options.keys())   
+        )
+        gestation_history = binary_yes_no_options[selected_gestational_hist_option]
+
+
+        st.write("Are you currently pregnant?")
+        selected_pregnant_option = st.radio(
+            "Select your option:",
+            options=list(binary_yes_no_options.keys())   
+        )
+        pregnant = binary_yes_no_options[selected_pregnant_option]
+
+        st.write("Have you been diagnosed with PCOS?")
+        selected_pcos_option = st.radio(
+            "Select your option:",
+            options=list(binary_yes_no_options.keys())   
+        )
+        pcos = binary_yes_no_options[selected_pcos_option]
+
         # Add rest of the female-specific questions and logic...
         # Mock CGM input field for demonstration purposes
-        cgm_input = st.text_area("Enter your CGM data (mock input), comma-separated, 20 values. Example: time1,value1,time2,value2,...")
-        gender_specific_data = {'Pregnancies': pregnancies, 'Gestation in previous Pregnancy': gestation_history, 'PCOS': pcos}
-        
-    
-    elif st.session_state.gender == "Male":
-        # (Prediction flow for males here, same as before...)
-        smoking = st.selectbox("Do you smoke?", options=["", "Yes", "No"])
-        regular_medicine = st.selectbox("Do you take regular medicine for diabetes?", options=["", "Yes", "No"])
-        stress = st.selectbox("Do you experience high levels of stress?", options=["", "Yes", "No"])
-        # Add rest of the male-specific questions and logic...
-        cgm_input = st.text_area("Enter your CGM data (mock input), comma-separated, 20 values. Example: time1,value1,time2,value2,...")
-        gender_specific_data = {'Smoking': smoking, 'RegularMedicine': regular_medicine, 'Stress': stress}
+        # cgm_input = st.text_area("Enter your CGM data (mock input), comma-separated, 20 values. Example: time1,value1,time2,value2,...")
 
-    # The rest of the prediction code remains the same...
-    input_data_dict = {
-        'Age': age,
-        'PhysicallyActive': physically_active,
-        'BPLevel': bp_level,
-        'HighBP': high_bp,
-        'Sleep': sleep,
-        'SoundSleep': sound_sleep,
-        'BMI': bmi if height_in and weight_lb else None
-    }
-    input_data_dict.update(gender_specific_data)
+        '''
+        'Age', 'HighBP', 'PhysicallyActive', 'BMI', 'Sleep', 'SoundSleep',
+       'JunkFood', 'BPLevel', 'Pregnancies', 'UriationFreq', 'HighChol',
+       'Fruits', 'Veggies', 'GenHlth', 'PhysHlth',
+       'Gestation in previous Pregnancy', 'PCOS', 'sudden weight loss',
+       'visual blurring', 'delayed healing', 'Pregnant']
+        
+        '''
+
+        input_data_dict = {
+            'Age': age,
+            'HighBP': high_bp,
+            'PhysicallyActive': physicallyactive,
+            'BMI': bmi if height_in and weight_lb else None,
+            'Sleep': sleep,
+            'SoundSleep': sound_sleep,
+            'JunkFood': junkfood,
+            'BPLevel': bp_level,
+            'Pregnancies': pregnancies,
+            'UriationFreq': urinationfreq,
+            'HighChol': high_chol,
+            "Fruits": fruits,
+            "Veggies": veggies,
+            "GenHlth": gen_hlth,
+            "PhysHlth": phys_hlth,
+            "Gestation in previous pregnancy": gestation_history,
+            "PCOS": pcos,
+            "sudden weight loss": sudden_weight_loss,
+            "visual blurring": visual_blurring,
+            "delayed healing": delayed_healing,
+            "Pregnant": pregnant
+        }
+    elif st.session_state.gender == "Male":
+        '''
+        ['Age', 'HighBP', 'PhysicallyActive', 'BMI', 'Sleep', 'SoundSleep',
+       'JunkFood', 'BPLevel', 'UriationFreq', 'HighChol', 'Fruits', 'Veggies',
+       'GenHlth', 'PhysHlth', 'sudden weight loss', 'visual blurring',
+       'delayed healing']
+        '''
+        input_data_dict = {
+            'Age': age,
+            'HighBP': high_bp,
+            'PhysicallyActive': physicallyactive,
+            'BMI': bmi if height_in and weight_lb else None,
+            'Sleep': sleep,
+            'SoundSleep': sound_sleep,
+            'JunkFood': junkfood,
+            'BPLevel': bp_level,
+            'UriationFreq': urinationfreq,
+            'HighChol': high_chol,
+            "Fruits": fruits,
+            "Veggies": veggies,
+            "GenHlth": gen_hlth,
+            "PhysHlth": phys_hlth,
+            "sudden weight loss": sudden_weight_loss,
+            "visual blurring": visual_blurring,
+            "delayed healing": delayed_healing,
+        }
+        
 
     if st.button("Submit"):
-        # Create a new dictionary for encoded data excluding 'Gender'
-        input_data_encoded = {}
-
-        # Encode categorical variables
-        for key in input_data_dict.keys():
-            if isinstance(input_data_dict[key], str) and input_data_dict[key]:
-                input_data_encoded[key] = custom_label_encode(input_data_dict[key], key)
-            else:
-                input_data_encoded[key] = input_data_dict[key]  # Include numeric inputs as is
-
-        st.warning(f"Encoded categorical data: {input_data_encoded}")
-
-        # Display mock CGM input if provided
-        if st.session_state.gender == "Female" and cgm_input:
-            st.info(f"Mock CGM Data Received: {cgm_input}")
         
         # Convert to DataFrame for prediction
-        input_data_df = pd.DataFrame([input_data_encoded])  # Create DataFrame from dictionary
+        input_data_df = pd.DataFrame([input_data_dict])  # Create DataFrame from dictionary
 
         # Prediction using the structured model
         if st.session_state.gender == "Female":
             # Define the expected feature names as they were during model training
-            expected_feature_names = ['Age', 'HighBP', 'PhysicallyActive', 'BMI', 'Sleep', 'SoundSleep', 'BPLevel', 'Pregnancies', 'Gestation in previous Pregnancy', 'PCOS']
+            expected_feature_names = ['Age', 'HighBP', 'PhysicallyActive', 'BMI', 'Sleep', 'SoundSleep',
+                                      'JunkFood', 'BPLevel', 'Pregnancies', 'UriationFreq', 'HighChol',
+                                      'Fruits', 'Veggies', 'GenHlth', 'PhysHlth',
+                                      'Gestation in previous Pregnancy', 'PCOS', 'sudden weight loss',
+                                      'visual blurring', 'delayed healing', 'Pregnant']
+            
             # Reorder the DataFrame to match the expected feature names
             input_data_df = input_data_df.reindex(columns=expected_feature_names)
             # Create the DMatrix
@@ -279,7 +440,7 @@ else:
 
         elif st.session_state.gender == "Male":
             # Define the expected feature names as they were during model training
-            expected_feature_names = ['Age', 'HighBP', 'PhysicallyActive', 'BMI', 'Smoking', 'Sleep', 'SoundSleep', 'RegularMedicine', 'Stress', 'BPLevel']
+            expected_feature_names = ['Age', 'HighBP', 'PhysicallyActive', 'BMI', 'Sleep', 'SoundSleep', 'JunkFood', 'BPLevel', 'UriationFreq', 'HighChol', 'Fruits', 'Veggies', 'GenHlth', 'PhysHlth', 'sudden weight loss', 'visual blurring', 'delayed healing']
             # Reorder the DataFrame to match the expected feature names
             input_data_df = input_data_df.reindex(columns=expected_feature_names)
             # Create the DMatrix
@@ -318,7 +479,7 @@ else:
 
         # Prepare the entry for MongoDB
         query = {'username': st.session_state.username}
-        new_value = {**input_data_encoded, 'class_probabilities': structured_probs.tolist(),  # Convert to list for JSON serialization
+        new_value = {**input_data_dict, 'class_probabilities': structured_probs.tolist(),  # Convert to list for JSON serialization
         'prediction': int(predicted_class),  # Ensure prediction is a standard integer
         'diagnosis': class_labels[predicted_class]}
         update = {'$push': {'data': new_value}}
