@@ -9,9 +9,9 @@ import hashlib
 
 # Load the pre-trained models
 female_structured_model = xgb.Booster()
-female_structured_model.load_model('xgboost_female.bin')
+female_structured_model.load_model('xgboost_female.json')
 male_structured_model = xgb.Booster()
-male_structured_model.load_model('xgboost_male.bin')
+male_structured_model.load_model('xgboost_male.json')
 
 # Load environment variables
 load_dotenv()
