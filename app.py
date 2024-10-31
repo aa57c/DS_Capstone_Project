@@ -148,6 +148,20 @@ else:
         user_input = st.text_input(label)
         return float(user_input) if user_input else None
     
+    '''
+    Features used for Female:
+    ['PCOS', 'Pregnancies', 'Pregnant', 'Gestation in previous Pregnancy']
+
+    Features used for Male:
+    ['Age', 'HighBP', 'PhysicallyActive', 'BMI', 'Sleep', 'SoundSleep',
+    'JunkFood', 'BPLevel', 'UriationFreq', 'Fruits', 'Veggies', 'GenHlth',
+    'PhysHlth', 'sudden weight loss', 'visual blurring', 'delayed healing']
+    
+    Features used for Both:
+    ['Age', 'HighBP', 'PhysicallyActive', 'BMI', 'Sleep', 'SoundSleep',
+    'JunkFood', 'BPLevel', 'UriationFreq', 'Fruits', 'Veggies', 'GenHlth',
+    'PhysHlth', 'sudden weight loss', 'visual blurring', 'delayed healing']
+    '''
     age = number_input_with_none("Enter your age")
     physically_active = st.selectbox("How much physical activity do you get daily?", options=["", "Less than half an hour", "None", "More than half an hour", "One hour or more"])
     bp_level = st.selectbox("What is your blood pressure level?", options=["", "High", "Normal", "Low"])
