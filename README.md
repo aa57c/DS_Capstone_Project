@@ -10,4 +10,4 @@ Session Achievements
 
 Future Work
 - Further improve on CGM model (cross-entropy loss is not correct and training is not correct)
-- incorporate LLM into app for recommendations
+- incorporate LLM into app for recommendations (will use LLama for determining the risk factors and recommendations)
