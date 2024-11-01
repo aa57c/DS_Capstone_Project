@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 import hashlib
 import datetime
 import joblib
+import time
 
 # Load the pre-trained models
 female_structured_model = xgb.Booster()
@@ -104,6 +105,7 @@ if not st.session_state.logged_in:
                     st.success(f"Welcome back, {username}!")
                 else:
                     st.info(f"Please select your gender, {username}.")
+                    time.sleep(5)
                 st.rerun()  # Refresh the app to load the next step
             else:
                 st.error("Invalid username or password.")
@@ -420,6 +422,7 @@ else:
         # Add timestamp to the input data dictionary
         input_data_dict['timestamp'] = datetime.datetime.now()
         input_data_dict['cgm'] = cgm_lstm_input.tolist()
+        input_data_dict['gender'] = st.session_state.gender
 
         # Prepare the entry for MongoDB
         query = {'username': st.session_state.username}
