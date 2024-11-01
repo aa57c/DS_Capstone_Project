@@ -1,18 +1,23 @@
 import streamlit as st
 import numpy as np
 import xgboost as xgb
+import tensorflow as tf
 import pandas as pd
 from pymongo import MongoClient
 import os
 from dotenv import load_dotenv
 import hashlib
 import datetime
+import joblib
 
 # Load the pre-trained models
 female_structured_model = xgb.Booster()
 female_structured_model.load_model('xgboost_female.json')
 male_structured_model = xgb.Booster()
 male_structured_model.load_model('xgboost_male.json')
+cgm_model = tf.keras.models.load_model('cgm_model.keras')
+scaler = joblib.load('minmax_scaler.pkl')
+
 
 # Load environment variables
 load_dotenv()
@@ -361,11 +366,25 @@ else:
             "visual blurring": visual_blurring,
             "delayed healing": delayed_healing,
         }
-        
+    cgm_input = st.text_area("Enter your CGM data, comma-separated, 24 values for each hour of the day. Example: glucose_value1,glucose_value2,glucose_value3,...")
+    # Parse and process the CGM input values
+    cgm_values = cgm_input.split(",")  # Split comma-separated input
+    try:
+        cgm_values = [float(val.strip()) for val in cgm_values if val.strip()]  # Convert to floats and remove any whitespace
+        assert len(cgm_values) == 24, "Please enter exactly 24 values for CGM data."  # Ensure there are exactly 24 values
+    except ValueError:
+        st.error("Invalid CGM data format. Please enter numeric values only.")
+    except AssertionError as e:
+        st.error(e)
+
 
     if st.button("Submit"):
         # Convert to DataFrame for prediction
         input_data_df = pd.DataFrame([input_data_dict])  # Create DataFrame from dictionary
+        cgm_scaled = scaler.transform(np.array(cgm_values).reshape(-1, 1)).flatten()  # Scale and flatten the array
+        # Prepare CGM data for the LSTM model
+        cgm_lstm_input = np.array(cgm_scaled).reshape((1, 24, 1))  # Shape to (1, 24, 1)
+        lstm_prediction = cgm_model.predict(cgm_lstm_input)
         # Prediction using the structured model
         if st.session_state.gender == "Female":
             # Define the expected feature names as they were during model training
@@ -380,43 +399,7 @@ else:
             # Create the DMatrix
             d_matrix = xgb.DMatrix(data=input_data_df)
             structured_probs = female_structured_model.predict(d_matrix)
-            predicted_class = np.argmax(structured_probs)
-            st.success(f"The predicted class is: {class_labels[predicted_class]} with probability {np.max(structured_probs):.2f}")
-
-            # Recommendations for female based on the predicted class
-            if predicted_class == 0:  # No diabetes
-                st.info(
-                    "**Recommendation**: To reduce the risk of diabetes in the future: \n"
-                    "- Maintain a balanced diet rich in fruits and vegetables. \n"
-                    "- Engage in regular physical activity (at least 30 minutes daily). \n"
-                    "- Monitor your weight and ensure a healthy BMI. \n"
-                    "- Get regular health check-ups, especially if you have a family history of diabetes. \n"
-                    "- If you had gestational diabetes during pregnancy, monitor blood sugar levels post-pregnancy as you may be at higher risk of developing type 2 diabetes."
-                )
-                # Additional feature-based recommendations
-                if input_data_dict['PhysicallyActive'] in [0, 1]:
-                    st.warning("Consider increasing your daily physical activity to at least 30 minutes to reduce the risk of diabetes.")
-                if bmi and bmi >= 25:
-                    st.warning("Your BMI indicates that you are overweight. Consider adopting a balanced diet and exercise plan to achieve a healthier BMI.")
-
-            elif predicted_class == 3:  # Gestational diabetes
-                st.info(
-                    "**Recommendation**: Since you have been predicted with **gestational diabetes**: \n"
-                    "- Follow your doctor’s advice closely to manage blood sugar levels during pregnancy. \n"
-                    "- Maintain a healthy diet and engage in moderate physical activity. \n"
-                    "- Post-pregnancy, continue monitoring your blood sugar levels as gestational diabetes can increase the risk of developing type 2 diabetes later in life."
-                )
-
-            else:  # Diabetes or prediabetes
-                st.info(
-                    "**Recommendation**: Since you have been predicted as diabetic or prediabetic: \n"
-                    "- Consult a healthcare provider for personalized care. \n"
-                    "- Regularly monitor your blood glucose levels. \n"
-                    "- Follow a healthy eating plan recommended by a dietitian. \n"
-                    "- Exercise regularly (at least 150 minutes of moderate activity per week). \n"
-                    "- Take any prescribed medications on time. \n"
-                    "- Consider regular screenings for heart health, as diabetes increases cardiovascular risks."
-                )
+            combined_preds = (lstm_prediction + structured_probs) / 2
 
         elif st.session_state.gender == "Male":
             # Define the expected feature names as they were during model training
@@ -425,40 +408,22 @@ else:
             input_data_df = input_data_df.reindex(columns=expected_feature_names)
             # Create the DMatrix
             d_matrix = xgb.DMatrix(data=input_data_df)
-
             structured_probs = male_structured_model.predict(d_matrix)
-            predicted_class = np.argmax(structured_probs)
-            st.success(f"The predicted class is: {class_labels[predicted_class]} with probability {np.max(structured_probs):.2f}")
-            
-            # Recommendations for male based on the predicted class
-            if predicted_class == 0:  # No diabetes
-                st.info(
-                    "**Recommendation**: To lower the risk of future diabetes: \n"
-                    "- Incorporate regular physical activity into your daily routine (at least 30 minutes or more). \n"
-                    "- Eat a balanced diet and limit processed foods and sugars. \n"
-                    "- Maintain a healthy weight and get regular health check-ups."
-                )
-                if bmi and bmi >= 25:
-                    st.warning("Your BMI indicates you are overweight. A healthy BMI reduces the risk of diabetes.")
-                if input_data_dict['PhysicallyActive'] in [0, 1]:
-                    st.warning("Consider increasing your physical activity to at least 30 minutes daily to reduce the risk of diabetes.")
+            lstm_preds_male = lstm_prediction[:, :3]  # Ignore the 4th class (gestational)
+            # Combine the predictions. Here you might want to average the probabilities or take a majority vote
+            combined_preds = (lstm_preds_male + structured_probs) / 2  # Averaging, adjust as needed
 
-            else:  # Diabetes or prediabetes
-                st.info(
-                    "**Recommendation**: Based on your diagnosis of diabetes or prediabetes: \n"
-                    "- Visit a healthcare professional for guidance. \n"
-                    "- Keep track of your blood sugar levels regularly. \n"
-                    "- Engage in regular physical activity (such as brisk walking or cycling). \n"
-                    "- Follow your prescribed medications and treatment plan diligently. \n"
-                    "- Consider adopting a diet low in refined sugars and saturated fats."
-                )
         
+        predicted_class = np.argmax(combined_preds)
+        st.success(f"The predicted class is: {class_labels[predicted_class]} with probability {np.max(structured_probs):.2f}")
+
         # Add timestamp to the input data dictionary
         input_data_dict['timestamp'] = datetime.datetime.now()
+        input_data_dict['cgm'] = cgm_lstm_input.tolist()
 
         # Prepare the entry for MongoDB
         query = {'username': st.session_state.username}
-        new_value = {**input_data_dict, 'class_probabilities': structured_probs.tolist(),  # Convert to list for JSON serialization
+        new_value = {**input_data_dict, 'class_probabilities': combined_preds.tolist(),  # Convert to list for JSON serialization
         'prediction': int(predicted_class),  # Ensure prediction is a standard integer
         'diagnosis': class_labels[predicted_class]}
         update = {'$push': {'data': new_value}}
