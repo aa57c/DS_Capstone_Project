@@ -10,32 +10,33 @@ import hashlib
 import datetime
 import joblib
 import time
+import subprocess
+# Load pre-trained models
 
-# Load the pre-trained models
-female_structured_model = xgb.Booster()
-female_structured_model.load_model('xgboost_female.json')
-male_structured_model = xgb.Booster()
-male_structured_model.load_model('xgboost_male.json')
+
+female_model = xgb.Booster()
+female_model.load_model('xgboost_female.json')
+
+male_model = xgb.Booster()
+male_model.load_model('xgboost_male.json')
+
 cgm_model = tf.keras.models.load_model('cgm_model.keras')
 scaler = joblib.load('minmax_scaler.pkl')
 
 
-# Load environment variables
 load_dotenv()
 mongo_uri = os.getenv("MONGO_DB_CONN_URL")
-
-# Connect to MongoDB
 client = MongoClient(mongo_uri)
-diabetes_db = client['DiabetesRepo']
-predictions_collection = diabetes_db['Diabetes_Prediction_Data']
-user_db = client['Users']
-credentials_collection = user_db['Credentials']
+db = client['DiabetesRepo']
+predictions_collection = db['Diabetes_Prediction_Data']
+credentials_collection = client['Users']['Credentials']
 
 # Function to hash passwords
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
 # Function to check if user exists in the database
+@st.cache_resource
 def check_user_credentials(username, password):
     hashed_password = hash_password(password)
     user = credentials_collection.find_one({"username": username, "password": hashed_password})
@@ -65,6 +66,23 @@ def styled_header(title, subtitle=None):
     st.markdown(f"<h1 style='color: #4CAF50;'>{title}</h1>", unsafe_allow_html=True)
     if subtitle:
         st.markdown(f"<h3 style='color: #555;'>{subtitle}</h3>", unsafe_allow_html=True)
+
+def generate_recommendations(user_input_summary):
+    # Construct the command to run
+    command = f'ollama run llama3 "{user_input_summary}"'
+    
+    # Run the command and capture output
+    process = subprocess.run(command, shell=True, capture_output=True, text=True)
+
+    # Check if the process was successful
+    if process.returncode != 0:
+        # Return error output if the command failed
+        return f"Error: {process.stderr.strip()}"
+    
+    # Return the command output
+    return process.stdout.strip()
+
+
 
 
 # Define class labels
@@ -369,24 +387,25 @@ else:
             "delayed healing": delayed_healing,
         }
     cgm_input = st.text_area("Enter your CGM data, comma-separated, 24 values for each hour of the day. Example: glucose_value1,glucose_value2,glucose_value3,...")
-    # Parse and process the CGM input values
-    cgm_values = cgm_input.split(",")  # Split comma-separated input
-    try:
-        cgm_values = [float(val.strip()) for val in cgm_values if val.strip()]  # Convert to floats and remove any whitespace
-        assert len(cgm_values) == 24, "Please enter exactly 24 values for CGM data."  # Ensure there are exactly 24 values
-    except ValueError:
-        st.error("Invalid CGM data format. Please enter numeric values only.")
-    except AssertionError as e:
-        st.error(e)
-
-
+    
     if st.button("Submit"):
+        # Parse and process the CGM input values
+        cgm_values = cgm_input.split(",")  # Split comma-separated input
+        try:
+            cgm_values = [float(val.strip()) for val in cgm_values if val.strip()]  # Convert to floats and remove any whitespace
+            assert len(cgm_values) == 24, "Please enter exactly 24 values for CGM data."  # Ensure there are exactly 24 values
+        except ValueError:
+            st.error("Invalid CGM data format. Please enter numeric values only.")
+        except AssertionError as e:
+            st.error(e)
         # Convert to DataFrame for prediction
         input_data_df = pd.DataFrame([input_data_dict])  # Create DataFrame from dictionary
         cgm_scaled = scaler.transform(np.array(cgm_values).reshape(-1, 1)).flatten()  # Scale and flatten the array
         # Prepare CGM data for the LSTM model
         cgm_lstm_input = np.array(cgm_scaled).reshape((1, 24, 1))  # Shape to (1, 24, 1)
         lstm_prediction = cgm_model.predict(cgm_lstm_input)
+        combined_preds = None
+        structured_probs = None
         # Prediction using the structured model
         if st.session_state.gender == "Female":
             # Define the expected feature names as they were during model training
@@ -400,7 +419,7 @@ else:
             input_data_df = input_data_df.reindex(columns=expected_feature_names)
             # Create the DMatrix
             d_matrix = xgb.DMatrix(data=input_data_df)
-            structured_probs = female_structured_model.predict(d_matrix)
+            structured_probs = female_model.predict(d_matrix)
             combined_preds = (lstm_prediction + structured_probs) / 2
 
         elif st.session_state.gender == "Male":
@@ -410,19 +429,17 @@ else:
             input_data_df = input_data_df.reindex(columns=expected_feature_names)
             # Create the DMatrix
             d_matrix = xgb.DMatrix(data=input_data_df)
-            structured_probs = male_structured_model.predict(d_matrix)
+            structured_probs = male_model.predict(d_matrix)
             lstm_preds_male = lstm_prediction[:, :3]  # Ignore the 4th class (gestational)
             # Combine the predictions. Here you might want to average the probabilities or take a majority vote
             combined_preds = (lstm_preds_male + structured_probs) / 2  # Averaging, adjust as needed
 
-        
         predicted_class = np.argmax(combined_preds)
         st.success(f"The predicted class is: {class_labels[predicted_class]} with probability {np.max(structured_probs):.2f}")
-
         # Add timestamp to the input data dictionary
         input_data_dict['timestamp'] = datetime.datetime.now()
-        input_data_dict['cgm'] = cgm_lstm_input.tolist()
         input_data_dict['gender'] = st.session_state.gender
+        input_data_dict['cgm'] = cgm_lstm_input.tolist()
 
         # Prepare the entry for MongoDB
         query = {'username': st.session_state.username}
@@ -432,5 +449,26 @@ else:
         update = {'$push': {'data': new_value}}
         # Insert entry into MongoDB
         predictions_collection.update_one(query, update)
-        st.success("Data successfully uploaded to MongoDB!")
+        st.success(f"Data successfully updated for {st.session_state.username}")
+    
+    if st.button('Get Recommendations'):
+        # Generating a user input summary for recommendations
+        user_input_summary = ", ".join([f"{k}: {v}" for k, v in input_data_dict.items()])
+        # Show a spinner and waiting message while generating recommendations
+        with st.spinner("Generating recommendations... Please wait."):
+            # Run the asynchronous recommendation generation
+            recommendations = generate_recommendations(user_input_summary)
+
+        # Display personalized lifestyle recommendations
+        st.write("Here are your personalized lifestyle recommendations:")
+        st.info(recommendations)
+        query = {'username': st.session_state.username}
+        new_value = {'recommendations': recommendations}
+        update = {'$push': {'data': new_value}}
+        predictions_collection.update_one(query, update)
+        st.success(f"Recommendations successfully saved for {st.session_state.username}")
+
+
+
+
 
