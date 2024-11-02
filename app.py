@@ -10,7 +10,7 @@ import hashlib
 import datetime
 import joblib
 import time
-import subprocess
+import requests
 # Load pre-trained models
 
 
@@ -67,20 +67,21 @@ def styled_header(title, subtitle=None):
     if subtitle:
         st.markdown(f"<h3 style='color: #555;'>{subtitle}</h3>", unsafe_allow_html=True)
 
-def generate_recommendations(user_input_summary):
-    # Construct the command to run
-    command = f'ollama run llama3 "{user_input_summary}"'
-    
-    # Run the command and capture output
-    process = subprocess.run(command, shell=True, capture_output=True, text=True)
-
-    # Check if the process was successful
-    if process.returncode != 0:
-        # Return error output if the command failed
-        return f"Error: {process.stderr.strip()}"
-    
-    # Return the command output
-    return process.stdout.strip()
+API_URL = 'http://localhost:11434/api/generate'
+def generate_recommendations(user_data):
+    payload = {
+        "model": "llama3.2",
+        "prompt": f"Give recommendations for someone with these characteristics: {user_data}",
+        "stream": False
+    }
+    response = requests.post(API_URL, json=payload)
+    if response.status_code == 200:
+        # Convert the response content from JSON and print it
+        response_json = response.json()
+        return response_json['response']
+    else:
+        st.error(f"Error: {response.status_code}")
+        return []
 
 
 
@@ -443,11 +444,10 @@ else:
         # Generating a user input summary for recommendations
         user_input_summary = ", ".join([f"{k}: {v}" for k, v in input_data_dict.items()])
         # Show a spinner and waiting message while generating recommendations
-        with st.spinner("Generating recommendations... Please wait."):
-            # Run the asynchronous recommendation generation
+        with st.spinner("Getting recommendations..."):
             recommendations = generate_recommendations(user_input_summary)
 
-        st.info("Here are your recommendations:\n" + recommendations)
+        st.info(recommendations)
 
         # Prepare the entry for MongoDB
         query = {'username': st.session_state.username}
