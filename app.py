@@ -440,18 +440,6 @@ else:
         input_data_dict['timestamp'] = datetime.datetime.now()
         input_data_dict['gender'] = st.session_state.gender
         input_data_dict['cgm'] = cgm_lstm_input.tolist()
-
-        # Prepare the entry for MongoDB
-        query = {'username': st.session_state.username}
-        new_value = {**input_data_dict, 'class_probabilities': combined_preds.tolist(),  # Convert to list for JSON serialization
-        'prediction': int(predicted_class),  # Ensure prediction is a standard integer
-        'diagnosis': class_labels[predicted_class]}
-        update = {'$push': {'data': new_value}}
-        # Insert entry into MongoDB
-        predictions_collection.update_one(query, update)
-        st.success(f"Data successfully updated for {st.session_state.username}")
-    
-    if st.button('Get Recommendations'):
         # Generating a user input summary for recommendations
         user_input_summary = ", ".join([f"{k}: {v}" for k, v in input_data_dict.items()])
         # Show a spinner and waiting message while generating recommendations
@@ -459,15 +447,17 @@ else:
             # Run the asynchronous recommendation generation
             recommendations = generate_recommendations(user_input_summary)
 
-        # Display personalized lifestyle recommendations
-        st.write("Here are your personalized lifestyle recommendations:")
-        st.info(recommendations)
-        query = {'username': st.session_state.username}
-        new_value = {'recommendations': recommendations}
-        update = {'$push': {'data': new_value}}
-        predictions_collection.update_one(query, update)
-        st.success(f"Recommendations successfully saved for {st.session_state.username}")
+        st.info("Here are your recommendations:\n" + recommendations)
 
+        # Prepare the entry for MongoDB
+        query = {'username': st.session_state.username}
+        new_value = {**input_data_dict, 'class_probabilities': combined_preds.tolist(),  # Convert to list for JSON serialization
+        'prediction': int(predicted_class),  # Ensure prediction is a standard integer
+        'diagnosis': class_labels[predicted_class], 'recommendations': recommendations}
+        update = {'$push': {'data': new_value}}
+        # Insert entry into MongoDB
+        predictions_collection.update_one(query, update)
+        st.success(f"Data successfully updated for {st.session_state.username}")
 
 
 
