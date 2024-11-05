@@ -274,7 +274,7 @@ def collect_cgm_input():
     except (ValueError, AssertionError) as e:
         st.error(e)
         return None
-def save_to_mongodb(input_data_dict, combined_preds, predicted_class):
+def save_to_mongodb(input_data_dict, combined_preds, predicted_class, cgm_lstm_input):
     """Saves user input and prediction results to MongoDB."""
     # Prepare a summary for recommendations
     user_input_summary = ", ".join([
@@ -295,7 +295,8 @@ def save_to_mongodb(input_data_dict, combined_preds, predicted_class):
         'class_probabilities': combined_preds.tolist(),
         'prediction': int(predicted_class),
         'diagnosis': CLASS_LABELS[predicted_class],
-        'recommendations': recommendations
+        'recommendations': recommendations,
+        'cgm': cgm_lstm_input.tolist()
     })
     predictions_collection.update_one(
         {'username': st.session_state.username},
@@ -323,11 +324,16 @@ def predict(input_data_dict, cgm_values):
 
     # Run LSTM and structured model predictions
     lstm_prediction = cgm_model.predict(cgm_lstm_input)
+
+    # Ignore the last class if session_state equals "Male"
+    if st.session_state.get('gender') == "Male":
+        lstm_prediction = lstm_prediction[:, :-1]  # Remove the last class
+
     structured_probs = xgboost_predict(input_data_df)
     combined_preds = (lstm_prediction + structured_probs) / 2
     predicted_class = np.argmax(combined_preds)
     
-    return structured_probs, combined_preds, predicted_class
+    return structured_probs, combined_preds, predicted_class, cgm_lstm_input
 
 
 def process_and_submit(input_data_dict, cgm_values):
@@ -336,13 +342,13 @@ def process_and_submit(input_data_dict, cgm_values):
         return  # Exit if CGM data is invalid
     
     # Prepare and predict
-    structured_probs, combined_preds, predicted_class = predict(input_data_dict, cgm_values)
+    structured_probs, combined_preds, predicted_class, cgm_lstm_input = predict(input_data_dict, cgm_values)
 
     # Display results
     st.success(f"Predicted class: {CLASS_LABELS[predicted_class]} with probability {np.max(structured_probs):.2f}")
     
     # Add data to MongoDB
-    save_to_mongodb(input_data_dict, combined_preds, predicted_class)
+    save_to_mongodb(input_data_dict, combined_preds, predicted_class, cgm_lstm_input)
 
 def encode_inputs(input_data):
     # Now map the options to their values
