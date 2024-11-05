@@ -1,49 +1,98 @@
+# Imports
 import streamlit as st
 import numpy as np
-import xgboost as xgb
-import tensorflow as tf
 import pandas as pd
-from pymongo import MongoClient
 import os
-from dotenv import load_dotenv
 import hashlib
 import datetime
-import joblib
-import time
 import requests
-# Load pre-trained models
+from pymongo import MongoClient
+from dotenv import load_dotenv
+import joblib
+import xgboost as xgb
+import tensorflow as tf
 
-
-female_model = xgb.Booster()
-female_model.load_model('xgboost_female.json')
-
-male_model = xgb.Booster()
-male_model.load_model('xgboost_male.json')
-
-cgm_model = tf.keras.models.load_model('cgm_model.keras')
-scaler = joblib.load('minmax_scaler.pkl')
-
-
+# Load environment variables
 load_dotenv()
-mongo_uri = os.getenv("MONGO_DB_CONN_URL")
-client = MongoClient(mongo_uri)
-db = client['DiabetesRepo']
-predictions_collection = db['Diabetes_Prediction_Data']
-credentials_collection = client['Users']['Credentials']
+MONGO_URI = os.getenv("MONGO_DB_CONN_URL")
+# API Call Function
+API_URL = 'http://localhost:11434/api/generate'
 
-# Function to hash passwords
+# Define class labels
+CLASS_LABELS = {
+    0: "No diabetes",
+    1: "Prediabetes",
+    2: "Type 2 diabetes",
+    3: "Gestational diabetes"
+}
+
+# Define the expected feature names for female and male patients
+female_feature_names = [
+    'Age', 'HighBP', 'PhysicallyActive', 'BMI', 'Sleep', 'SoundSleep', 'JunkFood', 'BPLevel', 
+    'Pregnancies', 'UriationFreq', 'HighChol', 'Fruits', 'Veggies', 'GenHlth', 'PhysHlth', 
+    'Gestation in previous Pregnancy', 'PCOS', 'sudden weight loss', 'visual blurring', 
+    'delayed healing', 'Pregnant'
+]
+
+male_feature_names = [
+    'Age', 'HighBP', 'PhysicallyActive', 'BMI', 'Sleep', 'SoundSleep', 'JunkFood', 'BPLevel', 
+    'UriationFreq', 'HighChol', 'Fruits', 'Veggies', 'GenHlth', 'PhysHlth', 
+    'sudden weight loss', 'visual blurring', 'delayed healing'
+]
+
+# Define options
+binary_yes_no_options = {"Yes": 1, "No": 0}
+physical_activity_options = {
+    "Not Active": 0, "Lightly Active": 1, "Moderately Active": 2, "Very Active": 3
+}
+junk_food_options = {"Occasionally": 0, "Often": 1, "Very Often": 2, "Always": 3}
+bp_level_options = {"Normal": 0, "Low": 1, "High": 2}
+urination_freq_options = {"4-7 times/day": 0, "More than 7-10 times/day": 1}
+gen_hlth_options = {"Excellent": 1, "Very Good": 2, "Good": 3, "Fair": 4, "Poor": 5}
+ 
+
+# Initialize MongoDB client and database collections
+@st.cache_resource
+def get_mongo_collections():
+    client = MongoClient(MONGO_URI)
+    diabetes_db = client['DiabetesRepo']
+    user_db = client['Users']
+    predictions_collection = diabetes_db['Diabetes_Prediction_Data']
+    credentials_collection = user_db['Credentials']
+    return predictions_collection, credentials_collection
+
+
+# Load pre-trained models
+@st.cache_resource
+def load_models():
+    female_model = xgb.Booster()
+    female_model.load_model('xgboost_female.json')
+
+    male_model = xgb.Booster()
+    male_model.load_model('xgboost_male.json')
+
+    cgm_model = tf.keras.models.load_model('cgm_model.keras')
+    scaler = joblib.load('minmax_scaler.pkl')
+
+    return female_model, male_model, cgm_model, scaler
+
+female_model, male_model, cgm_model, scaler = load_models()
+predictions_collection, credentials_collection = get_mongo_collections()
+
+# Utility Functions
 def hash_password(password):
+    """Hash a password using SHA-256."""
     return hashlib.sha256(password.encode()).hexdigest()
 
-# Function to check if user exists in the database
 @st.cache_resource
 def check_user_credentials(username, password):
+    """Check if user credentials are valid."""
     hashed_password = hash_password(password)
     user = credentials_collection.find_one({"username": username, "password": hashed_password})
     return user
 
-# Sign-up function
 def sign_up_user(username, password):
+    """Create a new user."""
     hashed_password = hash_password(password)
     credentials_collection.insert_one({
         "username": username,
@@ -51,24 +100,12 @@ def sign_up_user(username, password):
         "gender": None  # Gender will be added after login
     })
 
-# Update gender in the database
 def update_user_gender(username, gender):
+    """Update user's gender information."""
     credentials_collection.update_one({"username": username}, {"$set": {"gender": gender}})
 
-# Streamlit session state for managing login/signup
-if 'logged_in' not in st.session_state:
-    st.session_state.logged_in = False
-    st.session_state.username = None
-    st.session_state.gender = None
-
-# Helper function to add style to sections
-def styled_header(title, subtitle=None):
-    st.markdown(f"<h1 style='color: #4CAF50;'>{title}</h1>", unsafe_allow_html=True)
-    if subtitle:
-        st.markdown(f"<h3 style='color: #555;'>{subtitle}</h3>", unsafe_allow_html=True)
-
-API_URL = 'http://localhost:11434/api/generate'
 def generate_recommendations(user_data):
+    """Fetch recommendations based on user data."""
     payload = {
         "model": "llama3.2",
         "prompt": f"Give recommendations for someone with these characteristics: {user_data}",
@@ -76,26 +113,36 @@ def generate_recommendations(user_data):
     }
     response = requests.post(API_URL, json=payload)
     if response.status_code == 200:
-        # Convert the response content from JSON and print it
         response_json = response.json()
-        return response_json['response']
+        return response_json.get('response', [])
     else:
         st.error(f"Error: {response.status_code}")
         return []
 
+# UI Helper Functions
+def styled_header(title, subtitle=None):
+    """Display a styled header."""
+    st.markdown(f"<h1 style='color: #4CAF50;'>{title}</h1>", unsafe_allow_html=True)
+    if subtitle:
+        st.markdown(f"<h3 style='color: #555;'>{subtitle}</h3>", unsafe_allow_html=True)
+
+# Streamlit session state initialization
+def initialize_session_state():
+    """Initialize session state variables if they are not already set."""
+    if 'logged_in' not in st.session_state:
+        st.session_state.logged_in = False
+    if 'username' not in st.session_state:
+        st.session_state.username = None
+    if 'gender' not in st.session_state:
+        st.session_state.gender = None
+
+# Call the initialization function at the start of the app
+initialize_session_state()
 
 
-
-# Define class labels
-class_labels = {
-    0: "No diabetes",
-    1: "Prediabetes",
-    2: "Type 2 diabetes",
-    3: "Gestational diabetes"
-}
-
-# Sign-up/Login Page
-if not st.session_state.logged_in:
+# Sign-up/Login and Gender Selection Functions
+def display_login_page():
+    """Display the login and sign-up page."""
     styled_header("Diabetes Prediction App - Sign Up / Login")
 
     # Username and password input
@@ -105,34 +152,42 @@ if not st.session_state.logged_in:
     # Check if both fields are filled before enabling buttons
     if username and password:
         if st.button("Sign Up"):
-            # Check if user already exists
-            if credentials_collection.find_one({"username": username}):
-                st.warning("Username already exists. Please choose a different one.")
-            else:
-                # Sign up the user without gender (gender is selected after login)
-                sign_up_user(username, password)
-                st.success("Sign up successful! You can now log in.")
+            handle_signup(username, password)
 
         if st.button("Log In"):
-            # Validate login credentials
-            user = check_user_credentials(username, password)
-            if user:
-                st.session_state.logged_in = True
-                st.session_state.username = username
-                st.session_state.gender = user['gender']
-                if st.session_state.gender:
-                    st.success(f"Welcome back, {username}!")
-                else:
-                    st.info(f"Please select your gender, {username}.")
-                    time.sleep(5)
-                st.rerun()  # Refresh the app to load the next step
-            else:
-                st.error("Invalid username or password.")
+            handle_login(username, password)
     else:
         st.info("Please fill out both fields to enable sign-up and login.")
 
-# Gender Selection Page (if gender not yet selected)
-elif not st.session_state.gender:
+def handle_signup(username, password):
+    """Handle user sign-up."""
+    if credentials_collection.find_one({"username": username}):
+        st.warning("Username already exists. Please choose a different one.")
+    else:
+        sign_up_user(username, password)
+        st.success("Sign up successful! You can now log in.")
+
+def handle_login(username, password):
+    """Handle user login."""
+    user = check_user_credentials(username, password)
+    if user:
+        st.session_state.logged_in = True
+        st.session_state.username = username
+        st.session_state.gender = user['gender']
+        welcome_user(user)
+        st.rerun()  # Refresh the app to load the next step
+    else:
+        st.error("Invalid username or password.")
+
+def welcome_user(user):
+    """Display a welcome message based on the user's gender."""
+    if user['gender']:
+        st.success(f"Welcome back, {user['username']}!")
+    else:
+        st.info(f"Please select your gender, {user['username']}.")
+
+def display_gender_selection():
+    """Display the gender selection page if not already set."""
     styled_header(f"Welcome {st.session_state.username}!")
 
     # Gender selection
@@ -141,324 +196,198 @@ elif not st.session_state.gender:
     if gender != "Select your gender" and st.button("Submit"):
         st.session_state.gender = gender
         update_user_gender(st.session_state.username, gender)
-        predictions_collection.insert_one({'username': st.session_state.username, 'data': []})
-        st.success(f"Gender selection successful! You can now proceed.")
+        initialize_user_data(st.session_state.username)
+        st.success("Gender selection successful! You can now proceed.")
         st.rerun()  # Refresh the app to load the prediction page
+
+def initialize_user_data(username):
+    """Initialize a new user's data entry in the predictions collection."""
+    predictions_collection.insert_one({'username': username, 'data': []})
+
+# Helper Functions
+def logout():
+    """Log the user out and reset session state."""
+    st.session_state.logged_in = False
+    st.session_state.username = None
+    st.session_state.gender = None
+    st.rerun()
+
+def number_input_with_none(label):
+    user_input = st.text_input(label)
+    return float(user_input) if user_input else None
+def calculate_bmi():
+    """Calculate and display BMI from height and weight."""
+    height_in = number_input_with_none("Height (in inches)")
+    weight_lb = number_input_with_none("Weight (in pounds)")
+    if height_in and weight_lb:
+        bmi = (weight_lb * 703) / (height_in ** 2)
+        st.success(f"Your calculated BMI is: **{bmi:.2f}**")
+        return bmi
+    st.warning("Provide both height and weight for BMI calculation.")
+    return None
+
+def collect_user_inputs():
+    """Collects common user inputs and returns as a dictionary."""
+    input_data = {
+        'Age': number_input_with_none("Enter your age"),
+        'HighBP': st.radio("Have you been diagnosed with high blood pressure?", list(binary_yes_no_options.keys()), key="high_bp_key"),
+        'PhysicallyActive': st.radio("Physical activity per week:", list(physical_activity_options.keys())),
+        'BMI': calculate_bmi(),
+        'Sleep': number_input_with_none("Average sleep time per day (in hours)"),
+        'SoundSleep': number_input_with_none("Average hours of sound sleep"),
+        'JunkFood': st.radio("How often do you eat junk food?", list(junk_food_options.keys())),
+        'BPLevel': st.radio("Blood pressure level:", list(bp_level_options.keys())),
+        'UriationFreq': st.radio("Frequency of urination:", list(urination_freq_options.keys())),
+        'HighChol': st.radio("Diagnosed with high cholesterol?", list(binary_yes_no_options.keys()), key="high_chol_key"),
+        'Fruits': st.radio("Consume fruit daily?", list(binary_yes_no_options.keys()), key="fruits_key"),
+        'Veggies': st.radio("Consume vegetables daily?", list(binary_yes_no_options.keys()), key="veggies_key"),
+        'GenHlth': st.radio("General health status:", list(gen_hlth_options.keys()), key="gen_hlth_key"),
+        'PhysHlth': number_input_with_none("Physical health (days not good in the last 30 days)"),
+        'sudden weight loss': st.radio("Experienced sudden weight loss?", list(binary_yes_no_options.keys()), key="weight_loss_key"),
+        'visual blurring': st.radio("Experienced blurred vision?", list(binary_yes_no_options.keys()), key="blurred_vision_key"),
+        'delayed healing': st.radio("Wounds heal slowly?", list(binary_yes_no_options.keys()), key="delayed_healing_key"),
+    }
+    return input_data
+
+def collect_female_specific_inputs():
+    """Collects inputs specific to female users."""
+    pregnancies = st.number_input("Number of pregnancies", min_value=0, step=1)
+    gestation_history = st.radio("Had gestational diabetes in pregnancies?", list(binary_yes_no_options.keys()), key="gestation_hist_key") if pregnancies > 0 else 0
+    pregnant = st.radio("Currently pregnant?", list(binary_yes_no_options.keys()), key="pregnant_key")
+    pcos = st.radio("Diagnosed with PCOS?", list(binary_yes_no_options.keys()), key="pcos_key")
+
+    return {
+        "Pregnancies": pregnancies,
+        "Gestation in previous pregnancy": gestation_history,
+        "Pregnant": pregnant,
+        "PCOS": pcos
+    }
+
+def collect_cgm_input():
+    """Collect and validate CGM input."""
+    cgm_input = st.text_area("Enter your CGM data, comma-separated, 24 values for each hour of the day.")
+    cgm_values = cgm_input.split(",")
+    try:
+        cgm_values = [float(val.strip()) for val in cgm_values if val.strip()]
+        assert len(cgm_values) == 24, "Enter exactly 24 values for CGM data."
+        return cgm_values
+    except (ValueError, AssertionError) as e:
+        st.error(e)
+        return None
+def save_to_mongodb(input_data_dict, combined_preds, predicted_class):
+    """Saves user input and prediction results to MongoDB."""
+    # Prepare a summary for recommendations
+    user_input_summary = ", ".join([
+        f"{k}: {'Yes' if v == 1 else 'No' if v == 0 else v}" 
+        for k, v in input_data_dict.items()
+    ])
+
+    # Generate recommendations based on user input summary
+    with st.spinner("Getting recommendations..."):
+        recommendations = generate_recommendations(user_input_summary)
+
+    # Display the recommendations
+    st.info(recommendations)
+
+    input_data_dict.update({
+        'timestamp': datetime.datetime.now(),
+        'gender': st.session_state.gender,
+        'class_probabilities': combined_preds.tolist(),
+        'prediction': int(predicted_class),
+        'diagnosis': CLASS_LABELS[predicted_class],
+        'recommendations': recommendations
+    })
+    predictions_collection.update_one(
+        {'username': st.session_state.username},
+        {'$push': {'data': input_data_dict}}
+    )
+    st.success(f"Data successfully updated for {st.session_state.username}")
+def xgboost_predict(input_data_df):
+    """Runs prediction using XGBoost model."""
+    if st.session_state.gender == "Female":
+        input_data_df = input_data_df.reindex(columns=female_feature_names)
+        d_matrix = xgb.DMatrix(data=input_data_df)
+        return female_model.predict(d_matrix)
+    else:
+        input_data_df = input_data_df.reindex(columns=male_feature_names)
+        d_matrix = xgb.DMatrix(data=input_data_df)
+        return male_model.predict(d_matrix)
+
+def predict(input_data_dict, cgm_values):
+    """Runs the predictions for structured data and CGM data."""
+    # Create DataFrame and reshape CGM data for prediction
+    input_data_df = pd.DataFrame([input_data_dict])
+    st.table(input_data_df)
+    cgm_scaled = scaler.transform(np.array(cgm_values).reshape(-1, 1)).flatten()
+    cgm_lstm_input = np.array(cgm_scaled).reshape((1, 24, 1))
+
+    # Run LSTM and structured model predictions
+    lstm_prediction = cgm_model.predict(cgm_lstm_input)
+    structured_probs = xgboost_predict(input_data_df)
+    combined_preds = (lstm_prediction + structured_probs) / 2
+    predicted_class = np.argmax(combined_preds)
+    
+    return structured_probs, combined_preds, predicted_class
+
+
+def process_and_submit(input_data_dict, cgm_values):
+    """Processes inputs, runs predictions, and updates MongoDB."""
+    if cgm_values is None:
+        return  # Exit if CGM data is invalid
+    
+    # Prepare and predict
+    structured_probs, combined_preds, predicted_class = predict(input_data_dict, cgm_values)
+
+    # Display results
+    st.success(f"Predicted class: {CLASS_LABELS[predicted_class]} with probability {np.max(structured_probs):.2f}")
+    
+    # Add data to MongoDB
+    save_to_mongodb(input_data_dict, combined_preds, predicted_class)
+
+def encode_inputs(input_data):
+    # Now map the options to their values
+    for key, value in input_data.items():
+        if value in binary_yes_no_options.keys():
+            input_data[key] = binary_yes_no_options[input_data[key]]
+        elif value in physical_activity_options.keys():
+            input_data[key] = physical_activity_options[input_data[key]]
+        elif value in junk_food_options.keys():
+            input_data[key] = junk_food_options[input_data[key]]
+        elif value in bp_level_options.keys():
+            input_data[key] = bp_level_options[input_data[key]]
+        elif value in urination_freq_options.keys():
+            input_data[key] = urination_freq_options[input_data[key]]
+        elif value in gen_hlth_options.keys():
+            input_data[key] = gen_hlth_options[input_data[key]]
+    return input_data
+
+
+
+# Main Logic for Sign-up/Login or Gender Selection
+if not st.session_state.logged_in:
+    display_login_page()
+elif not st.session_state.gender:
+    display_gender_selection()
 
 # Gender-Specific Prediction Page (once logged in and gender selected)
 else:
     styled_header(f"Welcome {st.session_state.username}, Questionnaire for {st.session_state.gender} Patients")
 
     if st.button("Log Out"):
-        st.session_state.logged_in = False
-        st.session_state.username = None
-        st.session_state.gender = None
-        st.rerun()
-
-    
-    # Number input function
-    def number_input_with_none(label):
-        user_input = st.text_input(label)
-        return float(user_input) if user_input else None
-    
-    input_data_dict = {}
-
-    binary_yes_no_options = {
-        "Yes": 1,
-        "No" : 0
-    }
+        logout()
 
 
-    age = number_input_with_none("Enter your age")
 
-    st.write("Have you been diagnosed with high blood pressure?")
-    selected_high_bp = st.radio(
-        "Select your option:",
-        options=list(binary_yes_no_options.keys()),
-        key="high_bp_key"
-    )
-    # Retrieve the encoded value for the selected option
-    high_bp = binary_yes_no_options[selected_high_bp]
-
-    st.write("How many days per week are you typically physically active? Please select the option that best describes your activity level.")
-    physical_activity_options = {
-    "Not Active (Rarely or never active during the week)": 0,
-    "Lightly Active (1-2 days per week with light physical activity)": 1,
-    "Moderately Active (3-4 days per week, moderate activities like brisk walking)": 2,
-    "Very Active (5 or more days per week, vigorous activities like running)": 3
-    }
-    # Create a radio button for activity level selection
-    selected_physical_activity = st.radio(
-        "Select your physical activity level per week:",
-        options=list(physical_activity_options.keys())
-    )
-
-    physicallyactive = physical_activity_options[selected_physical_activity]
-
-    height_in = number_input_with_none("Height (in inches)")
-    weight_lb = number_input_with_none("Weight (in pounds)")
-    if height_in and weight_lb:
-        bmi = (weight_lb * 703) / (height_in ** 2)
-        st.success(f"Your calculated BMI is: **{bmi:.2f}**")
-    else:
-        st.warning("Please provide both height and weight for BMI calculation.")
-    
-    sleep = number_input_with_none("Average sleep time per day (in hours)")
-    sound_sleep = number_input_with_none("Average hours of sound sleep (sleep when you are lying completely still)")
-
-    st.write("How often do you eat junk food (foods high in sugar and cholesterol) per week?")
-    junk_food_options = {
-        "Occasionally": 0,
-        "Often": 1,
-        "Very Often": 2,
-        "Always": 3
-    }
-    selected_junk_food = st.radio(
-        "Select how often you eat junk food:",
-        options=list(junk_food_options.keys())
-    )
-
-    junkfood = junk_food_options[selected_junk_food]
-
-    st.write("What is your blood pressure level?")
-    bp_level_options = {
-        "Normal": 0,
-        "Low": 1,
-        "High": 2
-    }
-    selected_bp_level = st.radio(
-        "Select your blood pressure level:",
-        options=list(bp_level_options.keys())
-    )
-    bp_level = bp_level_options[selected_bp_level]
-
-    st.write("How often do you have to urinate per day?")
-    urination_freq_options = {
-        "Roughly 4 to 7 times per day": 0,
-        "More than 7 to 10 times per day": 1,
-    }
-
-    selected_urination_freq = st.radio(
-        "Select how frequently you urinate per day:",
-        options=list(urination_freq_options.keys())
-    )
-
-    urinationfreq = urination_freq_options[selected_urination_freq]
-
-    st.write("Are you diagnosed with high cholesterol?")
-    selected_high_chol_option = st.radio(
-        "Select your option:",
-        options=list(binary_yes_no_options.keys()),
-        key="high_chol_key"
-    )
-    high_chol = binary_yes_no_options[selected_high_chol_option]
-
-    st.write("Do you consume fruit per day?")
-    selected_fruit_option = st.radio(
-        "Select your option:",
-        options=list(binary_yes_no_options.keys()),
-        key="fruits_key"
-    )
-    st.write("Do you consume vegetables per day?")
-    selected_veggies_option = st.radio(
-        "Select your option:",
-        options=list(binary_yes_no_options.keys()),
-        key="veggies_key"
-    )
-
-    fruits = binary_yes_no_options[selected_fruit_option]
-    veggies = binary_yes_no_options[selected_veggies_option]
-
-    gen_hlth_options = {
-        "Excellent": 1,
-        "Very Good": 2,
-        "Good": 3,
-        "Fair": 4,
-        "Poor": 5
-    }
-    st.write("How would you describe your general health?")
-    selected_gen_hlth_option = st.radio(
-        "Would you say that in general your health is:",
-        options=list(gen_hlth_options.keys()),
-        key="gen_hlth_key"
-    )
-    gen_hlth = gen_hlth_options[selected_gen_hlth_option]
-
-    phys_hlth = number_input_with_none("Now thinking about your physical health, which includes physical illness and injury, for how many days during the past 30 days was your physical health not good?")
-
-    st.write("Have you experienced sudden loss of weight? (a loss of more than 5 percent of your body weight)")
-    selected_weight_loss_option = st.radio(
-        "Select your option:",
-        options=list(binary_yes_no_options.keys()),
-        key='weight_loss_key'
-    )
-
-    sudden_weight_loss = binary_yes_no_options[selected_weight_loss_option]
-
-    st.write("Have you experienced any blurred vision this week?")
-    selected_visual_blur_option = st.radio(
-        "Select your option:",
-        options=list(binary_yes_no_options.keys()),
-        key="blurred_vision_key"
-    )
-    visual_blurring = binary_yes_no_options[selected_visual_blur_option]
-
-    st.write("If you got injured, did you notice if your wound was healing slowly?")
-    selected_healing_option = st.radio(
-        "Select your option:",
-        options=list(binary_yes_no_options.keys()),
-        key="delayed_healing_key"   
-    )
-    delayed_healing = binary_yes_no_options[selected_healing_option]
+    # Collect user input
+    input_data_dict = collect_user_inputs()
 
     # Gender-Specific Questions
     if st.session_state.gender == "Female":
-        # (Prediction flow for females here, same as before...)
-        pregnancies = st.number_input("How many pregnancies have you had?", min_value=0, step=1)
-        st.write("Have you had gestational diabetes before in those pregnancies?")
-        selected_gestational_hist_option = st.radio(
-            "Select your option:",
-            options=list(binary_yes_no_options.keys()),
-            key="gestation_hist_key"      
-        )
-        gestation_history = binary_yes_no_options[selected_gestational_hist_option]
+        input_data_dict.update(collect_female_specific_inputs())
 
-
-        st.write("Are you currently pregnant?")
-        selected_pregnant_option = st.radio(
-            "Select your option:",
-            options=list(binary_yes_no_options.keys()),
-            key="pregnant_key"         
-        )
-        pregnant = binary_yes_no_options[selected_pregnant_option]
-
-        st.write("Have you been diagnosed with PCOS?")
-        selected_pcos_option = st.radio(
-            "Select your option:",
-            options=list(binary_yes_no_options.keys()),
-            key="pcos_key"   
-        )
-        pcos = binary_yes_no_options[selected_pcos_option]
-
-        # Add rest of the female-specific questions and logic...
-        # Mock CGM input field for demonstration purposes
-        # cgm_input = st.text_area("Enter your CGM data (mock input), comma-separated, 20 values. Example: time1,value1,time2,value2,...")
-
-        input_data_dict = {
-            'Age': age,
-            'HighBP': high_bp,
-            'PhysicallyActive': physicallyactive,
-            'BMI': bmi if height_in and weight_lb else None,
-            'Sleep': sleep,
-            'SoundSleep': sound_sleep,
-            'JunkFood': junkfood,
-            'BPLevel': bp_level,
-            'Pregnancies': pregnancies,
-            'UriationFreq': urinationfreq,
-            'HighChol': high_chol,
-            "Fruits": fruits,
-            "Veggies": veggies,
-            "GenHlth": gen_hlth,
-            "PhysHlth": phys_hlth,
-            "Gestation in previous pregnancy": gestation_history,
-            "PCOS": pcos,
-            "sudden weight loss": sudden_weight_loss,
-            "visual blurring": visual_blurring,
-            "delayed healing": delayed_healing,
-            "Pregnant": pregnant
-        }
-    elif st.session_state.gender == "Male":
-        input_data_dict = {
-            'Age': age,
-            'HighBP': high_bp,
-            'PhysicallyActive': physicallyactive,
-            'BMI': bmi if height_in and weight_lb else None,
-            'Sleep': sleep,
-            'SoundSleep': sound_sleep,
-            'JunkFood': junkfood,
-            'BPLevel': bp_level,
-            'UriationFreq': urinationfreq,
-            'HighChol': high_chol,
-            "Fruits": fruits,
-            "Veggies": veggies,
-            "GenHlth": gen_hlth,
-            "PhysHlth": phys_hlth,
-            "sudden weight loss": sudden_weight_loss,
-            "visual blurring": visual_blurring,
-            "delayed healing": delayed_healing,
-        }
-    cgm_input = st.text_area("Enter your CGM data, comma-separated, 24 values for each hour of the day. Example: glucose_value1,glucose_value2,glucose_value3,...")
+    input_data_dict = encode_inputs(input_data_dict)
     
+    cgm_values = collect_cgm_input()
+
     if st.button("Submit"):
-        # Parse and process the CGM input values
-        cgm_values = cgm_input.split(",")  # Split comma-separated input
-        try:
-            cgm_values = [float(val.strip()) for val in cgm_values if val.strip()]  # Convert to floats and remove any whitespace
-            assert len(cgm_values) == 24, "Please enter exactly 24 values for CGM data."  # Ensure there are exactly 24 values
-        except ValueError:
-            st.error("Invalid CGM data format. Please enter numeric values only.")
-        except AssertionError as e:
-            st.error(e)
-        # Convert to DataFrame for prediction
-        input_data_df = pd.DataFrame([input_data_dict])  # Create DataFrame from dictionary
-        cgm_scaled = scaler.transform(np.array(cgm_values).reshape(-1, 1)).flatten()  # Scale and flatten the array
-        # Prepare CGM data for the LSTM model
-        cgm_lstm_input = np.array(cgm_scaled).reshape((1, 24, 1))  # Shape to (1, 24, 1)
-        lstm_prediction = cgm_model.predict(cgm_lstm_input)
-        combined_preds = None
-        structured_probs = None
-        # Prediction using the structured model
-        if st.session_state.gender == "Female":
-            # Define the expected feature names as they were during model training
-            expected_feature_names = ['Age', 'HighBP', 'PhysicallyActive', 'BMI', 'Sleep', 'SoundSleep',
-                                      'JunkFood', 'BPLevel', 'Pregnancies', 'UriationFreq', 'HighChol',
-                                      'Fruits', 'Veggies', 'GenHlth', 'PhysHlth',
-                                      'Gestation in previous Pregnancy', 'PCOS', 'sudden weight loss',
-                                      'visual blurring', 'delayed healing', 'Pregnant']
-            
-            # Reorder the DataFrame to match the expected feature names
-            input_data_df = input_data_df.reindex(columns=expected_feature_names)
-            # Create the DMatrix
-            d_matrix = xgb.DMatrix(data=input_data_df)
-            structured_probs = female_model.predict(d_matrix)
-            combined_preds = (lstm_prediction + structured_probs) / 2
-
-        elif st.session_state.gender == "Male":
-            # Define the expected feature names as they were during model training
-            expected_feature_names = ['Age', 'HighBP', 'PhysicallyActive', 'BMI', 'Sleep', 'SoundSleep', 'JunkFood', 'BPLevel', 'UriationFreq', 'HighChol', 'Fruits', 'Veggies', 'GenHlth', 'PhysHlth', 'sudden weight loss', 'visual blurring', 'delayed healing']
-            # Reorder the DataFrame to match the expected feature names
-            input_data_df = input_data_df.reindex(columns=expected_feature_names)
-            # Create the DMatrix
-            d_matrix = xgb.DMatrix(data=input_data_df)
-            structured_probs = male_model.predict(d_matrix)
-            lstm_preds_male = lstm_prediction[:, :3]  # Ignore the 4th class (gestational)
-            # Combine the predictions. Here you might want to average the probabilities or take a majority vote
-            combined_preds = (lstm_preds_male + structured_probs) / 2  # Averaging, adjust as needed
-
-        predicted_class = np.argmax(combined_preds)
-        st.success(f"The predicted class is: {class_labels[predicted_class]} with probability {np.max(structured_probs):.2f}")
-        # Add timestamp to the input data dictionary
-        input_data_dict['timestamp'] = datetime.datetime.now()
-        input_data_dict['gender'] = st.session_state.gender
-        input_data_dict['cgm'] = cgm_lstm_input.tolist()
-        # Generating a user input summary for recommendations
-        user_input_summary = ", ".join([f"{k}: {v}" for k, v in input_data_dict.items()])
-        # Show a spinner and waiting message while generating recommendations
-        with st.spinner("Getting recommendations..."):
-            recommendations = generate_recommendations(user_input_summary)
-
-        st.info(recommendations)
-
-        # Prepare the entry for MongoDB
-        query = {'username': st.session_state.username}
-        new_value = {**input_data_dict, 'class_probabilities': combined_preds.tolist(),  # Convert to list for JSON serialization
-        'prediction': int(predicted_class),  # Ensure prediction is a standard integer
-        'diagnosis': class_labels[predicted_class], 'recommendations': recommendations}
-        update = {'$push': {'data': new_value}}
-        # Insert entry into MongoDB
-        predictions_collection.update_one(query, update)
-        st.success(f"Data successfully updated for {st.session_state.username}")
-
-
-
-
+        process_and_submit(input_data_dict, cgm_values)
