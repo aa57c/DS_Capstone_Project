@@ -274,6 +274,12 @@ def collect_cgm_input():
     except (ValueError, AssertionError) as e:
         st.error(e)
         return None
+
+def flatten_cgm_data(nested_cgm):
+    # Flatten the nested list
+    flattened_cgm = [item[0] for sublist in nested_cgm for item in sublist]
+    return flattened_cgm
+
 def save_to_mongodb(input_data_dict, combined_preds, predicted_class, cgm_lstm_input):
     """Saves user input and prediction results to MongoDB."""
     # Prepare a summary for recommendations
@@ -296,7 +302,7 @@ def save_to_mongodb(input_data_dict, combined_preds, predicted_class, cgm_lstm_i
         'prediction': int(predicted_class),
         'diagnosis': CLASS_LABELS[predicted_class],
         'recommendations': recommendations,
-        'cgm': cgm_lstm_input.tolist()
+        'cgm': flatten_cgm_data(cgm_lstm_input)
     })
     predictions_collection.update_one(
         {'username': st.session_state.username},
