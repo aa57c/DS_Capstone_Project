@@ -1,9 +1,10 @@
 import boto3
-import os
 import pandas as pd
 from pymongo import MongoClient
 from io import StringIO
 import datetime
+from dotenv import load_dotenv
+import os
 
 # Initialize S3 client
 s3 = boto3.client('s3')
@@ -16,15 +17,15 @@ def save_to_s3(dataframe, bucket, key):
     print(f"Data uploaded to {key}")
 
 def lambda_handler():
-
     # Fetch data from MongoDB
     try:
-        # MongoDB connection (MongoDB URI should be stored as an environment variable)
-        mongo_uri = 'mongodb+srv://aa57c:DXGymy4BJ97XAYYo@cluster0.yhab1.mongodb.net/'
-        client = MongoClient(mongo_uri)
+        # Load environment variables
+        load_dotenv()
+        MONGO_URI = os.getenv("MONGO_DB_CONN_URL")
+        client = MongoClient(MONGO_URI)
         db = client['DiabetesRepo']
         collection = db['Diabetes_Prediction_Data']
-    
+
         # Define S3 bucket
         s3_bucket = 'diabetes-prediction-data'  # Bucket name
         # Retrieve all documents
@@ -33,11 +34,11 @@ def lambda_handler():
         if not data:
             print("No data found in MongoDB collection.")
             return {'statusCode': 200, 'body': "No data found in MongoDB collection."}
-        
-        # Initialize lists to store structured data and CGM data separately
-        male_data_entries = []
-        female_data_entries = []
-        cgm_data_entries = []
+
+        # Initialize dictionaries to store latest data by username
+        male_data_entries = {}
+        female_data_entries = {}
+        cgm_data_entries = {}
 
         # Iterate through each user document
         for document in data:
@@ -45,40 +46,51 @@ def lambda_handler():
             
             # Iterate over each data entry within a user's document
             for entry in document.get("data", []):
-                # Split data based on gender
+                timestamp = entry.get("timestamp", None)
                 gender = entry.get("gender", "").lower()
-                
-                # Process structured data
-                structured_data = {k: v for k, v in entry.items() if k not in ["cgm", "class_probabilities", "diagnosis", "recommendations", "_id", "timestamp", "gender"]}
-                
+
+                if timestamp is None:
+                    continue  # Skip entries with no timestamp
+
+                # Find the latest entry for each user by timestamp
+                entry["timestamp"] = datetime.datetime.strptime(timestamp, '%Y-%m-%dT%H:%M:%S')  # Ensure timestamp is a datetime object
+
+                # Compare and store the latest entry per user
                 if gender == "male":
-                    male_data_entries.append(structured_data)
+                    if username not in male_data_entries or male_data_entries[username]["timestamp"] < entry["timestamp"]:
+                        male_data_entries[username] = entry
                 elif gender == "female":
-                    female_data_entries.append(structured_data)
+                    if username not in female_data_entries or female_data_entries[username]["timestamp"] < entry["timestamp"]:
+                        female_data_entries[username] = entry
 
                 # Process CGM data (if available)
                 if "cgm" in entry:
                     cgm_data = entry["cgm"]
-                    # Create a DataFrame from CGM data, where each CGM value gets a separate column
+                    cgm_entry = {"username": username, "timestamp": entry["timestamp"]}
                     cgm_columns = {f"cgm_{i+1}": value for i, value in enumerate(cgm_data)}
-                    cgm_entry = {"username": username}
                     cgm_entry.update(cgm_columns)
-                    cgm_data_entries.append(cgm_entry)
 
+                    if username not in cgm_data_entries or cgm_data_entries[username]["timestamp"] < entry["timestamp"]:
+                        cgm_data_entries[username] = cgm_entry
 
-        # Convert lists to DataFrames and upload to S3 as separate files
+        # Convert to DataFrames and upload to S3 as separate files
         current_date = datetime.datetime.now().strftime('%Y-%m-%d')
 
-        if male_data_entries:
-            df_male = pd.DataFrame(male_data_entries)
+        # Prepare data for male and female
+        male_data = [v for v in male_data_entries.values()]
+        female_data = [v for v in female_data_entries.values()]
+        cgm_data = [v for v in cgm_data_entries.values()]
+
+        if male_data:
+            df_male = pd.DataFrame(male_data)
             save_to_s3(df_male, s3_bucket, f'male-data/male_data_{current_date}.csv')
 
-        if female_data_entries:
-            df_female = pd.DataFrame(female_data_entries)
+        if female_data:
+            df_female = pd.DataFrame(female_data)
             save_to_s3(df_female, s3_bucket, f'female-data/female_data_{current_date}.csv')
 
-        if cgm_data_entries:
-            df_cgm = pd.DataFrame(cgm_data_entries)
+        if cgm_data:
+            df_cgm = pd.DataFrame(cgm_data)
             save_to_s3(df_cgm, s3_bucket, f'cgm-data/cgm_data_{current_date}.csv')
 
         return {'statusCode': 200, 'body': "Data successfully processed and uploaded to S3"}
@@ -88,4 +100,3 @@ def lambda_handler():
         raise e
 
 lambda_handler()
-

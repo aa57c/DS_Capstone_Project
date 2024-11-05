@@ -108,7 +108,7 @@ def generate_recommendations(user_data):
     """Fetch recommendations based on user data."""
     payload = {
         "model": "llama3.2",
-        "prompt": f"Give recommendations for someone with these characteristics: {user_data}",
+        "prompt": f"Provide a personalized lifestyle and dietary recommendation based on the following characteristics: {user_data}. Do not provide medical advice, just general wellness recommendations.",
         "stream": False
     }
     response = requests.post(API_URL, json=payload)
@@ -387,7 +387,6 @@ else:
 
     if st.button("Log Out"):
         logout()
-
 
 
     # Collect user input
