@@ -40,6 +40,9 @@ def lambda_handler():
         female_data_entries = {}
         cgm_data_entries = {}
 
+        # Keys to exclude from the final upload
+        exclude_keys = {"cgm", "diagnosis", "class_probabilities", "timestamp", "gender", "recommendations", "_id"}
+
         # Iterate through each user document
         for document in data:
             username = document.get("username", "unknown_user")
@@ -52,10 +55,13 @@ def lambda_handler():
                 if timestamp is None:
                     continue  # Skip entries with no timestamp
 
-                # Find the latest entry for each user by timestamp
-                entry["timestamp"] = datetime.datetime.strptime(timestamp, '%Y-%m-%dT%H:%M:%S')  # Ensure timestamp is a datetime object
+                # Convert timestamp to a datetime object if it’s a string
+                if isinstance(timestamp, str):
+                    entry["timestamp"] = datetime.datetime.strptime(timestamp, '%Y-%m-%dT%H:%M:%S')
+                else:
+                    entry["timestamp"] = timestamp  # Already a datetime object
 
-                # Compare and store the latest entry per user
+                # Keep the timestamp for comparison but exclude it in the final upload
                 if gender == "male":
                     if username not in male_data_entries or male_data_entries[username]["timestamp"] < entry["timestamp"]:
                         male_data_entries[username] = entry
@@ -73,13 +79,13 @@ def lambda_handler():
                     if username not in cgm_data_entries or cgm_data_entries[username]["timestamp"] < entry["timestamp"]:
                         cgm_data_entries[username] = cgm_entry
 
+        # Prepare final lists of data without excluded keys
+        male_data = [{k: v for k, v in entry.items() if k not in exclude_keys} for entry in male_data_entries.values()]
+        female_data = [{k: v for k, v in entry.items() if k not in exclude_keys} for entry in female_data_entries.values()]
+        cgm_data = [v for v in cgm_data_entries.values()]
+
         # Convert to DataFrames and upload to S3 as separate files
         current_date = datetime.datetime.now().strftime('%Y-%m-%d')
-
-        # Prepare data for male and female
-        male_data = [v for v in male_data_entries.values()]
-        female_data = [v for v in female_data_entries.values()]
-        cgm_data = [v for v in cgm_data_entries.values()]
 
         if male_data:
             df_male = pd.DataFrame(male_data)
