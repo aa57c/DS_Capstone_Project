@@ -21,7 +21,7 @@ WORKDIR /lambda
 
 # Install Python packages into the /lambda/python directory
 RUN mkdir -p /lambda/python/lib/python3.9/site-packages && \
-    /usr/bin/python3 -m pip install sagemaker[remote] -t /lambda/python/lib/python3.9/site-packages
+    /usr/bin/python3 -m pip install boto3==1.26.1 -t /lambda/python/lib/python3.9/site-packages
 
 # Create the lambda layer zip file
 RUN zip -r9 /lambda/lambda_layer2.zip python
