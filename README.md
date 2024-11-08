@@ -1,12 +1,8 @@
 Session Achievements
 
-- Completely simulated CGM data successfully for female and male patients for each diagnosis class (no diabetes, prediabetes, type 2) (Sai and Venkata)
-- Completed training of CGM model (Sai and Venkata)
-- Improved on CGM Model results by using LSTM version of the model (Ashna)
-- Finished LLM recommendations (Sreevardhan)
-- Started poster draft sections and design (Ashna, Sai, Venkata, Sreevardhan)
+- Completed sections of poster
+- Have an idea about the 5 minute video explaining the poster
 
 
 Future Work
-- improve LLM functionality (run time is slow)
-- work on poster draft sections
+- possibly work on retraining the models on real data input from users using a cloud platform (AWS)
