@@ -324,7 +324,6 @@ def predict(input_data_dict, cgm_values):
     """Runs the predictions for structured data and CGM data."""
     # Create DataFrame and reshape CGM data for prediction
     input_data_df = pd.DataFrame([input_data_dict])
-    st.table(input_data_df)
     cgm_scaled = scaler.transform(np.array(cgm_values).reshape(-1, 1)).flatten()
     cgm_lstm_input = np.array(cgm_scaled).reshape((1, 24, 1))
 
