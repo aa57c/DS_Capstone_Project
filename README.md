@@ -1,13 +1,14 @@
 Streamlit Diabetes Prediction Application
+
 Overview
 
 This repository contains a Streamlit application designed for predicting diabetes using pretrained XGBoost and LSTM models. The app collects user input, processes the data, and makes combined predictions from both models. User inputs and predictions are also stored in a MongoDB database for future retraining and analysis.
-Features
 
-    User-friendly interface for data entry and prediction.
-    Combines predictions from XGBoost and LSTM models.
-    Stores user data and prediction results in MongoDB.
-    Supports model retraining using recent user data stored in MongoDB and S3.
+Features
+- User-friendly interface for data entry and prediction.
+- Combines predictions from XGBoost and LSTM models.
+- Stores user data and prediction results in MongoDB.
+- Supports model retraining using recent user data stored in MongoDB and S3.
 
 Prerequisites
 
@@ -17,48 +18,56 @@ Prerequisites
 
   Installation
 1. Clone the Repository
-   git clone [https://github.com/yourusername/diabetes-prediction-app.git] (https://github.com/aa57c/DS_Capstone_Project.git)
-   cd DS_Capstone_Project
 
-2. Set up .ENV file for the database connection url
-   touch .env
-   Add this line into your .env file: MONGO_DB_CONN_URL=mongodb+srv://<username>:<password>@cluster0.yhab1.mongodb.net/
+       git clone [https://github.com/yourusername/diabetes-prediction-app.git] (https://github.com/aa57c/DS_Capstone_Project.git)
+       cd DS_Capstone_Project
+
+3. Set up .ENV file for the database connection url
+
+       touch .env
+       # .env
+       MONGO_DB_CONN_URL=mongodb+srv://<username>:<password>@cluster0.yhab1.mongodb.net/
+   
    Replace username with "guest" and password with "eMt8Q7P1JmN75eIc".
    *Note: This username and password is only used for demo purposes only, not for production. It will expire in 1 week.
 
-3. Install Dependencies
-   touch requirements.txt
+5. Install Dependencies
    
-   Add these lines into your text file:
-   streamlit==1.23.1
-   numpy==1.24.2
-   pandas==2.1.1
-   requests==2.31.0
-   pymongo==4.4.0
-   python-dotenv==1.0.0
-   joblib==1.2.0
-   xgboost==1.7.6
-   tensorflow==2.13.0
-   scikit-learn==1.2.2
+       # shell
+       touch requirements.txt
+   
+       # requirements.txt
+       streamlit==1.23.1
+       numpy==1.24.2
+       pandas==2.1.1
+       requests==2.31.0
+       pymongo==4.4.0
+       python-dotenv==1.0.0
+       joblib==1.2.0
+       xgboost==1.7.6
+       tensorflow==2.13.0
+       scikit-learn==1.2.2
+   
+       # shell
+       pip install -r requirements.txt
 
-   pip install -r requirements.txt
-
-4. Download and Install the Ollama Server
+7. Download and Install the Ollama Server
    To enhance your application with the LLM, you will need the Ollama server. Follow the link below for installation instructions:
    https://ollama.com/
    
-5. Run the application
-   streamlit run app.py
+8. Run the application
+
+       streamlit run app.py
 
 Configuration
 
-    Ensure that MongoDB is running locally or update the connection URI in the application code for remote access.
-    Modify the configuration settings in app.py as needed for your environment (e.g., model file paths and database credentials).
+- Ensure that MongoDB is running locally or update the connection URI in the application code for remote access.
+- Modify the configuration settings in app.py as needed for your environment (e.g., model file paths and database credentials).
 
 Usage
 
-    Open your web browser and navigate to http://localhost:8501.
-    Fill out the input fields and submit the form to receive a prediction.
-    View the results and prediction confidence, which will be logged in MongoDB.
+1. Open your web browser and navigate to http://localhost:8501.
+2. Fill out the input fields and submit the form to receive a prediction.
+3. View the results and prediction confidence, which will be logged in MongoDB.
     
 Hack A Roo Video Link: https://youtu.be/ilnozF_kpas
