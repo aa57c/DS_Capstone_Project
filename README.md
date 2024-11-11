@@ -11,10 +11,9 @@ Features
 - Supports model retraining using recent user data stored in MongoDB and S3.
 
 Prerequisites
-
-    Python 3.8 or higher
-    MongoDB (for data storage)
-    Ollama server (required for Large Language Model integrations)
+- Python 3.8 or higher
+- MongoDB (for data storage)
+- Ollama server (required for Large Language Model integrations)
 
   Installation
 1. Clone the Repository
