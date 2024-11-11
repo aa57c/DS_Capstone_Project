@@ -1,4 +1,5 @@
-Streamlit Diabetes Prediction Application
+AI Powered Diabetes Prediction and Health Coach App
+Demo: https://youtu.be/ilnozF_kpas
 
 Overview
 
@@ -76,4 +77,4 @@ Usage
 2. Fill out the input fields and submit the form to receive a prediction.
 3. View the results and prediction confidence, which will be logged in MongoDB.
     
-Hack A Roo Video Link: https://youtu.be/ilnozF_kpas
+
