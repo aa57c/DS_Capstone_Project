@@ -22,9 +22,12 @@ Prerequisites
        cd DS_Capstone_Project
 
 3. Set up .ENV file for the database connection url
-
+   shell
+   
        touch .env
-       # .env
+   
+   .env
+   
        MONGO_DB_CONN_URL=mongodb+srv://<username>:<password>@cluster0.yhab1.mongodb.net/
    
    Replace username with "guest" and password with "eMt8Q7P1JmN75eIc".
@@ -32,10 +35,12 @@ Prerequisites
 
 5. Install Dependencies
    
-       # shell
+   shell
+
        touch requirements.txt
-   
-       # requirements.txt
+
+requirements.txt
+       
        streamlit==1.23.1
        numpy==1.24.2
        pandas==2.1.1
@@ -47,7 +52,8 @@ Prerequisites
        tensorflow==2.13.0
        scikit-learn==1.2.2
    
-       # shell
+  shell
+       
        pip install -r requirements.txt
 
 7. Download and Install the Ollama Server
