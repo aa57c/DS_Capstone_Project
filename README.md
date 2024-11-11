@@ -39,7 +39,7 @@ Prerequisites
 
        touch requirements.txt
 
-requirements.txt
+   requirements.txt
        
        streamlit==1.23.1
        numpy==1.24.2
@@ -52,7 +52,7 @@ requirements.txt
        tensorflow==2.13.0
        scikit-learn==1.2.2
    
-  shell
+    shell
        
        pip install -r requirements.txt
 
