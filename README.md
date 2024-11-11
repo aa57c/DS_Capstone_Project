@@ -57,10 +57,11 @@ Prerequisites
        pip install -r requirements.txt
 
 7. Download and Install the Ollama Server
+   
    To enhance your application with the LLM, you will need the Ollama server. Follow the link below for installation instructions:
    https://ollama.com/
    
-8. Run the application
+9. Run the application
 
        streamlit run app.py
 
