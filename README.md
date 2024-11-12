@@ -62,6 +62,8 @@ Prerequisites
    
    To enhance your application with the LLM, you will need the Ollama server. Follow the link below for installation instructions:
    https://ollama.com/
+
+   Make sure the server is running before you run the application.
    
 9. Run the application
 
