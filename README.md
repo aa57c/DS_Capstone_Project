@@ -31,6 +31,8 @@ Prerequisites
    .env
    
        MONGO_DB_CONN_URL=mongodb+srv://<username>:<password>@cluster0.yhab1.mongodb.net/
+   
+   Replace <username> with "guest" and <password> with "6GR3Yfq4BfBDp3mZ". This is for demo purposes only, not for production.
 
 
 5. Install Dependencies
