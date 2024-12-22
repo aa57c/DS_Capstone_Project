@@ -1,23 +1,23 @@
-AI Powered Diabetes Prediction and Health Coach App
+### AI Powered Diabetes Prediction and Health Coach App
 
-Demo: https://youtu.be/ilnozF_kpas
+## Demo: https://youtu.be/ilnozF_kpas
 
-Overview
+## Overview
 
 This repository contains a Streamlit application designed for predicting diabetes using pretrained XGBoost and LSTM models. The app collects user input, processes the data, and makes combined predictions from both models. User inputs and predictions are also stored in a MongoDB database for future retraining and analysis.
 
-Features
+## Features
 - User-friendly interface for data entry and prediction.
 - Combines predictions from XGBoost and LSTM models.
 - Stores user data and prediction results in MongoDB.
 - Supports model retraining using recent user data stored in MongoDB and S3.
 
-Prerequisites
+## Prerequisites
 - Python 3.8 or higher
 - MongoDB (for data storage)
 - Ollama server (required for Large Language Model integrations)
 
-  Installation
+## Installation
 1. Clone the Repository
 
        git clone [https://github.com/yourusername/diabetes-prediction-app.git] (https://github.com/aa57c/DS_Capstone_Project.git)
@@ -67,12 +67,12 @@ Prerequisites
 
        streamlit run app.py
 
-Configuration
+## Configuration
 
 - Ensure that MongoDB is running locally or update the connection URI in the application code for remote access.
 - Modify the configuration settings in app.py as needed for your environment (e.g., model file paths and database credentials).
 
-Usage
+## Usage
 
 1. Open your web browser and navigate to http://localhost:8501.
 2. Fill out the input fields and submit the form to receive a prediction.
