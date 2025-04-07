@@ -14,8 +14,8 @@ import boto3
 
 # Load environment variables
 
-MONGO_URI = st.secrets("MONGO_DB_CONN_URL")
-BUCKET_NAME = st.secrets("BUCKET_NAME")
+MONGO_URI = st.secrets["MONGO_DB"]["MONGO_DB_CONN_URL"]
+BUCKET_NAME = st.secrets["S3"]["BUCKET_NAME"]
 # API Call Function
 #API_URL = 'http://localhost:11434/api/generate'
 
@@ -67,8 +67,8 @@ def get_mongo_collections():
 def download_models_from_s3(bucket, key, filename):
     s3 = boto3.client(
     's3',
-    aws_access_key_id=st.secrets["s3"]["access_key"],
-    aws_secret_access_key=st.secrets["s3"]["secret_key"]))
+    aws_access_key_id=st.secrets["S3"]["ACCESS_KEY"],
+    aws_secret_access_key=st.secrets["S3"]["SECRET_KEY"]))
     s3.download_file(bucket, key, filename)
 
 @st.cache_resource
