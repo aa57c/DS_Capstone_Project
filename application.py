@@ -11,13 +11,11 @@ import joblib
 import xgboost as xgb
 import tensorflow as tf
 import boto3
-import streamlit.web.bootstrap
-
 
 # Load environment variables
 
-MONGO_URI = os.environ.get("MONGO_DB_CONN_URL")
-BUCKET_NAME = os.environ.get("BUCKET_NAME")
+MONGO_URI = st.secrets("MONGO_DB_CONN_URL")
+BUCKET_NAME = st.secrets("BUCKET_NAME")
 # API Call Function
 #API_URL = 'http://localhost:11434/api/generate'
 
@@ -67,19 +65,22 @@ def get_mongo_collections():
 
 # Download pre-trained models from AWS S3
 def download_models_from_s3(bucket, key, filename):
-    s3 = boto3.client('s3')
+    s3 = boto3.client(
+    's3',
+    aws_access_key_id=st.secrets["s3"]["access_key"],
+    aws_secret_access_key=st.secrets["s3"]["secret_key"]))
     s3.download_file(bucket, key, filename)
 
 @st.cache_resource
 def load_models():
     female_model = xgb.Booster()
-    female_model.load_model('/models/xgboost_female.json')
+    female_model.load_model('/tmp/xgboost_female.json')
 
     male_model = xgb.Booster()
-    male_model.load_model('/models/xgboost_male.json')
+    male_model.load_model('/tmp/xgboost_male.json')
 
-    cgm_model = tf.keras.models.load_model('/models/cgm_model.keras')
-    scaler = joblib.load('/models/minmax_scaler.pkl')
+    cgm_model = tf.keras.models.load_model('/tmp/cgm_model.keras')
+    scaler = joblib.load('/tmp/minmax_scaler.pkl')
     return female_model, male_model, cgm_model, scaler
 
 models_to_load = ['xgboost_female.json', 'xgboost_male.json', 'cgm_model.keras', 'minmax_scaler.pkl']
