@@ -68,7 +68,7 @@ def download_models_from_s3(bucket, key, filename):
     s3 = boto3.client(
     's3',
     aws_access_key_id=st.secrets["s3"]["access_key"],
-    aws_secret_access_key=st.secrets["s3"]["secret_key"]))
+    aws_secret_access_key=st.secrets["s3"]["secret_key"])
     s3.download_file(bucket, key, filename)
 
 @st.cache_resource
