@@ -7,16 +7,19 @@ import hashlib
 import datetime
 import requests
 from pymongo import MongoClient
-from dotenv import load_dotenv
 import joblib
 import xgboost as xgb
 import tensorflow as tf
+import boto3
+import streamlit.web.bootstrap
+
 
 # Load environment variables
-load_dotenv()
-MONGO_URI = os.getenv("MONGO_DB_CONN_URL")
+
+MONGO_URI = os.environ.get("MONGO_DB_CONN_URL")
+BUCKET_NAME = os.environ.get("BUCKET_NAME")
 # API Call Function
-API_URL = 'http://localhost:11434/api/generate'
+#API_URL = 'http://localhost:11434/api/generate'
 
 # Define class labels
 CLASS_LABELS = {
@@ -62,19 +65,27 @@ def get_mongo_collections():
     return predictions_collection, credentials_collection
 
 
-# Load pre-trained models
+# Download pre-trained models from AWS S3
+def download_models_from_s3(bucket, key, filename):
+    s3 = boto3.client('s3')
+    s3.download_file(bucket, key, filename)
+
 @st.cache_resource
 def load_models():
     female_model = xgb.Booster()
-    female_model.load_model('xgboost_female.json')
+    female_model.load_model('/models/xgboost_female.json')
 
     male_model = xgb.Booster()
-    male_model.load_model('xgboost_male.json')
+    male_model.load_model('/models/xgboost_male.json')
 
-    cgm_model = tf.keras.models.load_model('cgm_model.keras')
-    scaler = joblib.load('minmax_scaler.pkl')
-
+    cgm_model = tf.keras.models.load_model('/models/cgm_model.keras')
+    scaler = joblib.load('/models/minmax_scaler.pkl')
     return female_model, male_model, cgm_model, scaler
+
+models_to_load = ['xgboost_female.json', 'xgboost_male.json', 'cgm_model.keras', 'minmax_scaler.pkl']
+
+for model in models_to_load:
+    download_models_from_s3(BUCKET_NAME, model, '/models/' + model)
 
 female_model, male_model, cgm_model, scaler = load_models()
 predictions_collection, credentials_collection = get_mongo_collections()
@@ -89,23 +100,26 @@ def check_user_credentials(username, password):
     """Check if user credentials are valid."""
     hashed_password = hash_password(password)
     user = credentials_collection.find_one({"username": username, "password": hashed_password})
-    return user
+    return hashed_password
 
 def sign_up_user(username, password):
     """Create a new user."""
     hashed_password = hash_password(password)
+    
     credentials_collection.insert_one({
         "username": username,
         "password": hashed_password,
         "gender": None  # Gender will be added after login
     })
+    
 
 def update_user_gender(username, gender):
     """Update user's gender information."""
     credentials_collection.update_one({"username": username}, {"$set": {"gender": gender}})
 
+'''
 def generate_recommendations(user_data):
-    """Fetch recommendations based on user data."""
+    Fetch recommendations based on user data.
     payload = {
         "model": "llama3.2",
         "prompt": f"Provide a personalized lifestyle and dietary recommendation based on the following characteristics: {user_data}. Do not provide medical advice, just general wellness recommendations.",
@@ -118,6 +132,7 @@ def generate_recommendations(user_data):
     else:
         st.error(f"Error: {response.status_code}")
         return []
+'''
 
 # UI Helper Functions
 def styled_header(title, subtitle=None):
@@ -125,6 +140,7 @@ def styled_header(title, subtitle=None):
     st.markdown(f"<h1 style='color: #4CAF50;'>{title}</h1>", unsafe_allow_html=True)
     if subtitle:
         st.markdown(f"<h3 style='color: #555;'>{subtitle}</h3>", unsafe_allow_html=True)
+
 
 # Streamlit session state initialization
 def initialize_session_state():
@@ -281,6 +297,7 @@ def flatten_cgm_data(nested_cgm):
     return flattened_cgm
 
 def save_to_mongodb(input_data_dict, combined_preds, predicted_class, cgm_lstm_input):
+    '''
     """Saves user input and prediction results to MongoDB."""
     # Prepare a summary for recommendations
     user_input_summary = ", ".join([
@@ -294,6 +311,7 @@ def save_to_mongodb(input_data_dict, combined_preds, predicted_class, cgm_lstm_i
 
     # Display the recommendations
     st.info(recommendations)
+    '''
 
     input_data_dict.update({
         'timestamp': datetime.datetime.now(),
