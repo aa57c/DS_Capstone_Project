@@ -72,7 +72,7 @@ def download_models_from_s3(bucket, key, filename):
     s3.download_file(bucket, key, filename)
 
 @st.cache_resource
-def load_models(model_name):
+def load_models():
     female_model = xgb.Booster()
     female_model.load_model(f'/tmp/xgboost_female.json')
 
