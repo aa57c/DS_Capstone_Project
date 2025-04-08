@@ -1,10 +1,10 @@
 streamlit==1.31.1
-boto3==1.24.12
-pandas==1.5.3
+boto3>=1.28.0
+pandas>=2.1.0
 keras>=2.15.0
-xgboost==1.6.1
-numpy>=1.19.5
-scipy>=1.6.0
+xgboost>=1.7.6
+numpy>=1.26.0
+scipy>=1.11.0
 joblib>=1.2.0
 threadpoolctl>=3.1.0
 tensorflow==2.17.1
