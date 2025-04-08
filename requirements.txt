@@ -7,3 +7,4 @@ joblib==1.1.0
 numpy>=1.26.0,<2.2.0
 tensorflow==2.17.1
 pymongo==4.6.1
+scikit-learn
