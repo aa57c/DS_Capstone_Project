@@ -72,9 +72,9 @@ def download_models_from_s3(bucket, key, filename):
     s3.download_file(bucket, key, filename)
 
 @st.cache_resource
-def load_models():
+def load_models(model_name):
     female_model = xgb.Booster()
-    female_model.load_model('/tmp/xgboost_female.json')
+    female_model.load_model(f'/tmp/xgboost_female.json')
 
     male_model = xgb.Booster()
     male_model.load_model('/tmp/xgboost_male.json')
@@ -86,7 +86,7 @@ def load_models():
 models_to_load = ['xgboost_female.json', 'xgboost_male.json', 'cgm_model.keras', 'minmax_scaler.pkl']
 
 for model in models_to_load:
-    download_models_from_s3(BUCKET_NAME, model, '/models/' + model)
+    download_models_from_s3(BUCKET_NAME, model, f'/tmp/{model}')
 
 female_model, male_model, cgm_model, scaler = load_models()
 predictions_collection, credentials_collection = get_mongo_collections()
