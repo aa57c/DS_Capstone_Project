@@ -101,7 +101,7 @@ def check_user_credentials(username, password):
     """Check if user credentials are valid."""
     hashed_password = hash_password(password)
     user = credentials_collection.find_one({"username": username, "password": hashed_password})
-    return hashed_password
+    return user
 
 def sign_up_user(username, password):
     """Create a new user."""
